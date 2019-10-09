@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <title>Ranked Matchmaking</title>
+
+  <script src="https://raw.githack.com/colyseus/colyseus.js/master/dist/colyseus.js?123"></script>
+  <style>
+    html, body {
+      font-size: 22px;
+    }
+
+    input { font-size: inherit; }
+
+    section {
+    }
+
+    section div.player {
+
+    }
+  </style>
+</head>
+<body>
+  <section>
+  </section>
+
+  <div class="new-player">
+    <form onsubmit="createNewPlayer(); return false;">
+      <input type="text" id="name" placeholder="name" />
+      <input type="number" id="rank" placeholder="rank" />
+      <input type="submit" value="create" />
+    </form>
+  </div>
+
+  <script>
+    const connections = [];
+    const client = new Colyseus.Client();
+
+    async function createNewPlayer() {
+      const connection = await client.joinOrCreate("ranked", {
+        rank: parseInt(document.querySelector("#rank").value)
+      });
+      connection.onMessage((message) => console.log(message));
+
+      connections.push(connection);
+
+      // re-set values for new connection
+      populateRandomValues();
+    }
+
+    function populateRandomValues() {
+      document.querySelector("#rank").value = Math.floor(Math.random() * 100);
+      document.querySelector("#name").value = "Player " + Math.floor(Math.random() * 99999);
+    }
+
+    populateRandomValues();
+  </script>
+
+</body>
+</html>
