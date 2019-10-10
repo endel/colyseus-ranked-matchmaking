@@ -120,6 +120,8 @@ export class RankedLobbyRoom extends Room {
         const diff = Math.abs(stat.rank - currentGroup.averageRank);
         const diffRatio = (diff / currentGroup.averageRank);
 
+        // TODO: magic numbers are not welcome here!
+        // figure out how to identify the diff ratio that makes sense
         if (diffRatio > 2) {
           currentGroup = this.createGroup();
           totalRank = 0;
