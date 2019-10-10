@@ -43,22 +43,15 @@ describe("Ranked matchmaker", () => {
   it("should lock group once number of allowed clients has been reached", () => {
     room.numClientsToMatch = 4;
 
-    const client1 = createClient();
-    const client2 = createClient();
-    const client3 = createClient();
-    const client4 = createClient();
-    const client5 = createClient();
-    const client6 = createClient();
-
     // group 1
-    room.onJoin(client1, { rank: 10 });
-    room.onJoin(client2, { rank: 20 });
-    room.onJoin(client3, { rank: 30 });
-    room.onJoin(client4, { rank: 40 });
+    room.onJoin(createClient(), { rank: 10 });
+    room.onJoin(createClient(), { rank: 20 });
+    room.onJoin(createClient(), { rank: 30 });
+    room.onJoin(createClient(), { rank: 40 });
 
     // group 2
-    room.onJoin(client5, { rank: 50 });
-    room.onJoin(client6, { rank: 20 });
+    room.onJoin(createClient(), { rank: 50 });
+    room.onJoin(createClient(), { rank: 20 });
 
     room.redistributeGroups();
 
@@ -108,6 +101,24 @@ describe("Ranked matchmaker", () => {
 
     assert.equal(1, room.groups[0].averageRank);
     assert.equal(45, room.groups[1].averageRank);
+  });
+
+  it("should distribute give priority to players waiting longer", () => {
+    room.numClientsToMatch = 4;
+    room.maxWaitingForPriority = 10;
+
+    room.onJoin(createClient(), { rank: 1 });
+    for (let i = 0; i < room.maxWaitingForPriority-1; i++) { room.redistributeGroups(); }
+
+    room.onJoin(createClient(), { rank: 30 });
+    room.onJoin(createClient(), { rank: 50 });
+    room.onJoin(createClient(), { rank: 60 });
+    room.onJoin(createClient(), { rank: 40 });
+
+    room.redistributeGroups();
+
+    assert.equal(30.25, room.groups[0].averageRank);
+    assert.equal(60, room.groups[1].averageRank);
   });
 
 });

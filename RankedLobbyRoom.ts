@@ -3,6 +3,7 @@ import { Room, Client } from "colyseus";
 interface MatchmakingGroup {
   averageRank: number;
   clients: ClientStat[],
+  priority?: boolean;
   locked?: boolean;
 }
 
@@ -17,9 +18,16 @@ interface ClientStat {
 export class RankedLobbyRoom extends Room {
   groups: MatchmakingGroup[] = [];
 
+  // after this time, create a match with a bot
   maxWaitingTime = 15;
-  numClientsToMatch = 4; // 2
 
+  // after this time, try to fit this client with a not-so-compatible group
+  maxWaitingForPriority = 10;
+
+  // number of players on each match
+  numClientsToMatch = 4;
+
+  // rank and group cache per-player
   stats: ClientStat[] = [];
 
   onCreate(options: any) {
@@ -84,13 +92,22 @@ export class RankedLobbyRoom extends Room {
 
     for (let i = 0, l = stats.length; i < l; i++) {
       const stat = stats[i];
+      stat.waitingTime++;
 
       if (currentGroup.clients.length === this.numClientsToMatch) {
         currentGroup = this.createGroup();
         totalRank = 0;
       }
 
-      if (currentGroup.averageRank > 0) {
+      // do not create a new group for this client, if he was waiting for too long
+      if (stat.waitingTime >= this.maxWaitingForPriority) {
+        currentGroup.priority = true;
+      }
+
+      if (
+        currentGroup.averageRank > 0 &&
+        !currentGroup.priority
+      ) {
         const diff = Math.abs(stat.rank - currentGroup.averageRank);
         const diffRatio = (diff / currentGroup.averageRank);
 
@@ -107,39 +124,6 @@ export class RankedLobbyRoom extends Room {
 
       currentGroup.averageRank = totalRank / currentGroup.clients.length;
     }
-  }
-
-  getAcceptanceRatePerGroups (stat: ClientStat) {
-    return this.groups
-      .filter(g => !g.locked)
-      .map((group) => ({
-        group: group,
-        ...this.getAcceptanceRatioInGroup(stat, group)
-      }))
-      .sort((a, b) => a.acceptanceRatio - b.acceptanceRatio);
-  }
-
-  getAcceptanceRatioInGroup (stat: ClientStat, group: MatchmakingGroup) {
-    const groupLength = group.clients.length + 1;
-    const rank = stat.rank;
-
-    const averageRank = (rank + group.clients.reduce<number>((previous, current) => {
-      previous += current.rank;
-      return previous;
-    }, 0)) / groupLength;
-
-    const diff = Math.abs(rank - averageRank);
-
-    return {
-      averageRank,
-      /**
-       * Acceptance ratio:
-       *     1 = same rank
-       *     <1 = player's rank is higher
-       *     >1 = player's rank is lower
-       */
-      acceptanceRatio: (diff / averageRank),
-    };
   }
 
   onLeave(client: Client, consented: boolean) {
