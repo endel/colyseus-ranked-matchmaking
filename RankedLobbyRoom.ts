@@ -1,15 +1,18 @@
 import { Room, Client } from "colyseus";
+import { matchMaker } from ".";
 
 interface MatchmakingGroup {
   averageRank: number;
   clients: ClientStat[],
   priority?: boolean;
-  locked?: boolean;
+
+  confirmed?: number;
 }
 
 interface ClientStat {
   client: Client;
   waitingTime: number;
+  options?: any;
   group?: MatchmakingGroup;
   rank: number;
   distance?: number; // used for sorting
@@ -17,6 +20,9 @@ interface ClientStat {
 
 export class RankedLobbyRoom extends Room {
   groups: MatchmakingGroup[] = [];
+  groupsReady: MatchmakingGroup[] = [];
+
+  roomToCreate = "game";
 
   // after this time, create a match with a bot
   maxWaitingTime = 15;
@@ -46,24 +52,36 @@ export class RankedLobbyRoom extends Room {
     this.stats.push({
       client: client,
       rank: options.rank,
-      waitingTime: 0
+      waitingTime: 0,
+      options
     });
-
-    /**
-     * TODO:
-     * - cache acceptance ratio per client/group
-     * - remove/re-order clients into groups upon joining
-     * - consider a group as `locked` once reached `numClientsToMatch`
-     * - send a message to everyone in a group, once the clients in it has changed
-     *
-     * AFTER MATCHMAKING IS DONE:
-     * - create a private room, and send `roomId` to all clients
-     * -
-     */
 
   }
 
   onMessage(client: Client, message: any) {
+    /**
+     * TODO:
+     *
+     * AFTER MATCHMAKING IS DONE:
+     * - create a private room, and send `roomId`/`sessionId` to matched clients
+     * - in the client-side, after `onJoin()` is done for every client, send a message here
+     * - go back to the queue if doesn't receive confirmation from all clients within a timeframe
+     */
+
+    if (message === 1) {
+      const stat = this.stats.find(stat => stat.client === client);
+
+      if (stat && stat.group && typeof(stat.group.confirmed) === "number") {
+        stat.group.confirmed++;
+
+        /**
+         * All clients confirmed, let's disconnect them!
+         */
+        if (stat.group.confirmed === stat.group.clients.length) {
+          stat.group.clients.forEach(client => client.client.close());
+        }
+      }
+    }
   }
 
   createGroup() {
@@ -72,20 +90,11 @@ export class RankedLobbyRoom extends Room {
     return group;
   }
 
-  redistributeGroups() {
-    /**
-     * Keep only `locked` groups.
-     */
-    this.groups = this.groups.filter(group => group.locked);
+  async redistributeGroups() {
+    // re-set all groups
+    this.groups = [];
 
-    let highestRank = 0;
-
-    const stats = this.stats
-      .filter(stat => {
-        if (stat.rank > highestRank) { highestRank = stat.rank; }
-        return !stat.group || !stat.group.locked
-      })
-      .sort((a, b) => a.rank - b.rank);
+    const stats = this.stats.sort((a, b) => a.rank - b.rank);
 
     let currentGroup: MatchmakingGroup = this.createGroup();
     let totalRank = 0;
@@ -124,9 +133,48 @@ export class RankedLobbyRoom extends Room {
 
       currentGroup.averageRank = totalRank / currentGroup.clients.length;
     }
+
+    await Promise.all(
+      this.groups
+        .map(async (group) => {
+          if (group.clients.length === this.numClientsToMatch) {
+            group.confirmed = 0;
+
+            /**
+             * Move group to `groupsReady`.
+             */
+            this.groupsReady.push(group);
+
+            /**
+             * Create room instance in the server.
+             */
+            const room = await matchMaker.createRoom(this.roomToCreate, {});
+
+            await Promise.all(group.clients.map(async (client) => {
+              const matchData = await (matchMaker as any).reserveSeatFor(room, client.options);
+
+              /**
+               * Send room data for new WebSocket connection!
+               */
+              this.send(client.client, matchData);
+            }));
+
+          } else {
+            /**
+             * Notify all clients within the group on how many players are in the queue
+             */
+            group.clients.forEach(client => this.send(client.client, currentGroup.clients.length));
+          }
+        })
+    );
   }
 
   onLeave(client: Client, consented: boolean) {
+    /**
+     * TODO:
+     * - if player is inside a READY group without confirmation, move all clients on that group back to the queue
+     */
+
     const index = this.stats.findIndex(stat => stat.client === client);
     this.stats.splice(index, 1);
   }

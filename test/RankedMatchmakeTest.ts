@@ -18,7 +18,7 @@ describe("Ranked matchmaker", () => {
 
   afterEach(() => room.onDispose());
 
-  it("should create acceptance group on join", () => {
+  it("should create acceptance group", () => {
     const client = createClient();
     room.onJoin(client, { rank: 10 });
 
@@ -40,7 +40,7 @@ describe("Ranked matchmaker", () => {
     assert.equal(1, room.groups.length);
   });
 
-  it("should lock group once number of allowed clients has been reached", () => {
+  it("should create new group once number of allowed clients has been reached", () => {
     room.numClientsToMatch = 4;
 
     // group 1
