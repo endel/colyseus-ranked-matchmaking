@@ -54,8 +54,8 @@
 
   <div class="new-player">
     <form onsubmit="createNewPlayer(); return false;">
-      <input type="text" id="name" placeholder="name" />
-      <input type="number" id="rank" placeholder="rank" />
+      Rank: <input type="number" id="rank" placeholder="rank" />
+      Match size: <input type="number" id="numClientsToMatch" placeholder="numClientsToMatch" value="4" />
       <input type="submit" value="create" />
     </form>
   </div>
@@ -65,12 +65,12 @@
 
   <script>
     const container = document.querySelector('section');
-    const numClientsToMatch = 4;
 
     const client = new Colyseus.Client();
 
     async function createNewPlayer() {
       const rank = parseInt(document.querySelector("#rank").value);
+      const numClientsToMatch = parseInt(document.querySelector("#numClientsToMatch").value);
 
       const connection = await client.joinOrCreate("ranked", { rank, numClientsToMatch });
 
@@ -104,7 +104,6 @@
 
     function populateRandomValues() {
       document.querySelector("#rank").value = Math.floor(Math.random() * 100);
-      document.querySelector("#name").value = "Player " + Math.floor(Math.random() * 99999);
     }
 
     populateRandomValues();
