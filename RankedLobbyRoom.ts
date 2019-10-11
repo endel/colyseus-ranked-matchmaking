@@ -8,6 +8,8 @@ interface MatchmakingGroup {
 
   ready?: boolean;
   confirmed?: number;
+
+  // cancelConfirmationTimeout?: Delayed;
 }
 
 interface ClientStat {
@@ -53,11 +55,11 @@ export class RankedLobbyRoom extends Room {
    */
   numClientsToMatch = 4;
 
-  /**
-   * after a group is ready, clients have this amount of milliseconds to confirm
-   * connection to the created room
-   */
-  cancelConfirmationAfter = 5000;
+  // /**
+  //  * after a group is ready, clients have this amount of milliseconds to confirm
+  //  * connection to the created room
+  //  */
+  // cancelConfirmationAfter = 5000;
 
   /**
    * rank and group cache per-player
@@ -73,6 +75,9 @@ export class RankedLobbyRoom extends Room {
       this.numClientsToMatch = options.numClientsToMatch;
     }
 
+    /**
+     * Redistribute clients into groups at every 2000ms
+     */
     this.setSimulationInterval(() => this.redistributeGroups(), 2000);
   }
 
@@ -108,6 +113,7 @@ export class RankedLobbyRoom extends Room {
          * All clients confirmed, let's disconnect them!
          */
         if (stat.group.confirmed === stat.group.clients.length) {
+          // stat.group.cancelConfirmationTimeout!.clear();
           stat.group.clients.forEach(client => client.client.close());
         }
       }
@@ -211,6 +217,17 @@ export class RankedLobbyRoom extends Room {
                */
               this.send(client.client, matchData);
             }));
+
+            // /**
+            //  * Cancel & re-enqueue clients if some of them couldn't confirm connection.
+            //  */
+            // group.cancelConfirmationTimeout = this.clock.setTimeout(() => {
+            //   group.clients.forEach(stat => {
+            //     this.send(stat.client, 0);
+            //     stat.group = undefined;
+            //     stat.waitingTime = 0;
+            //   });
+            // }, this.cancelConfirmationAfter);
 
           } else {
             /**
