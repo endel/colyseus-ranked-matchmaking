@@ -14,6 +14,14 @@ describe("Ranked matchmaker", () => {
   beforeEach(() => {
     room = new RankedLobbyRoom();
     room.onCreate({});
+
+    // ensure each call on `redistributeGroups()` will increase 1000ms
+    room.clock.deltaTime = 1000;
+
+    /**
+     * Mock `checkGroupsReady()` method for testing
+     */
+    room.checkGroupsReady = () => Promise.resolve();
   });
 
   afterEach(() => room.onDispose());
@@ -105,10 +113,10 @@ describe("Ranked matchmaker", () => {
 
   it("should distribute give priority to players waiting longer", () => {
     room.numClientsToMatch = 4;
-    room.maxWaitingForPriority = 10;
+    room.maxWaitingTimeForPriority = 10;
 
     room.onJoin(createClient(), { rank: 1 });
-    for (let i = 0; i < room.maxWaitingForPriority-1; i++) { room.redistributeGroups(); }
+    for (let i = 0; i < room.maxWaitingTimeForPriority-1; i++) { room.redistributeGroups(); }
 
     room.onJoin(createClient(), { rank: 30 });
     room.onJoin(createClient(), { rank: 50 });

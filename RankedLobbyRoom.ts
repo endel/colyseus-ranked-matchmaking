@@ -1,4 +1,4 @@
-import { Room, Client } from "colyseus";
+import { Room, Client, Delayed } from "colyseus";
 import { matchMaker } from ".";
 
 interface MatchmakingGroup {
@@ -16,25 +16,52 @@ interface ClientStat {
   options?: any;
   group?: MatchmakingGroup;
   rank: number;
-  distance?: number; // used for sorting
+  confirmed?: boolean;
 }
 
 export class RankedLobbyRoom extends Room {
-  groups: MatchmakingGroup[] = [];
-  groupsReady: MatchmakingGroup[] = [];
+  /**
+   * If `allowUnmatchedGroups` is true, players inside an unmatched group (that
+   * did not reached `numClientsToMatch`, and `maxWaitingTime` has been
+   * reached) will be matched together. Your room should fill the remaining
+   * spots with "bots" on this case.
+   */
+  allowUnmatchedGroups: boolean = false
 
+  /**
+   * Groups of players per iteration
+   */
+  groups: MatchmakingGroup[] = [];
+
+  /**
+   * name of the room to create
+   */
   roomToCreate = "game";
 
-  // after this time, create a match with a bot
-  maxWaitingTime = 15;
+  /**
+   * after this time, create a match with a bot
+   */
+  maxWaitingTime = 15 * 1000;
 
-  // after this time, try to fit this client with a not-so-compatible group
-  maxWaitingForPriority = 10;
+  /**
+   * after this time, try to fit this client with a not-so-compatible group
+   */
+  maxWaitingTimeForPriority?: number = 10 * 1000;
 
-  // number of players on each match
+  /**
+   * number of players on each match
+   */
   numClientsToMatch = 4;
 
-  // rank and group cache per-player
+  /**
+   * after a group is ready, clients have this amount of milliseconds to confirm
+   * connection to the created room
+   */
+  cancelConfirmationAfter = 5000;
+
+  /**
+   * rank and group cache per-player
+   */
   stats: ClientStat[] = [];
 
   onCreate(options: any) {
@@ -74,6 +101,7 @@ export class RankedLobbyRoom extends Room {
       const stat = this.stats.find(stat => stat.client === client);
 
       if (stat && stat.group && typeof(stat.group.confirmed) === "number") {
+        stat.confirmed = true;
         stat.group.confirmed++;
 
         /**
@@ -92,7 +120,7 @@ export class RankedLobbyRoom extends Room {
     return group;
   }
 
-  async redistributeGroups() {
+  redistributeGroups() {
     // re-set all groups
     this.groups = [];
 
@@ -103,7 +131,7 @@ export class RankedLobbyRoom extends Room {
 
     for (let i = 0, l = stats.length; i < l; i++) {
       const stat = stats[i];
-      stat.waitingTime++;
+      stat.waitingTime += this.clock.deltaTime;
 
       /**
        * do not attempt to re-assign groups for clients inside "ready" groups
@@ -117,8 +145,20 @@ export class RankedLobbyRoom extends Room {
         totalRank = 0;
       }
 
-      // do not create a new group for this client, if he was waiting for too long
-      if (stat.waitingTime >= this.maxWaitingForPriority) {
+      /**
+       * Match long-waiting clients with bots
+       * FIXME: peers of this group may be entered short ago
+       */
+      if (stat.waitingTime >= this.maxWaitingTime && this.allowUnmatchedGroups) {
+        currentGroup.ready = true;
+
+      /**
+       * Force this client to join a group, even if rank is incompatible
+       */
+      } else if (
+        this.maxWaitingTimeForPriority !== undefined &&
+        stat.waitingTime >= this.maxWaitingTimeForPriority
+      ) {
         currentGroup.priority = true;
       }
 
@@ -129,8 +169,10 @@ export class RankedLobbyRoom extends Room {
         const diff = Math.abs(stat.rank - currentGroup.averageRank);
         const diffRatio = (diff / currentGroup.averageRank);
 
-        // TODO: magic numbers are not welcome here!
-        // figure out how to identify the diff ratio that makes sense
+        /**
+         * TODO: MAGIC NUMBERS ARE NOT WELCOME HERE!
+         * figure out how to identify the diff ratio that makes sense
+         */
         if (diffRatio > 2) {
           currentGroup = this.createGroup();
           totalRank = 0;
@@ -145,17 +187,16 @@ export class RankedLobbyRoom extends Room {
       currentGroup.averageRank = totalRank / currentGroup.clients.length;
     }
 
+    this.checkGroupsReady();
+  }
+
+  async checkGroupsReady() {
     await Promise.all(
       this.groups
         .map(async (group) => {
-          if (group.clients.length === this.numClientsToMatch) {
+          if (group.ready || group.clients.length === this.numClientsToMatch) {
             group.ready = true;
             group.confirmed = 0;
-
-            /**
-             * Move group to `groupsReady`.
-             */
-            this.groupsReady.push(group);
 
             /**
              * Create room instance in the server.
@@ -175,18 +216,13 @@ export class RankedLobbyRoom extends Room {
             /**
              * Notify all clients within the group on how many players are in the queue
              */
-            group.clients.forEach(client => this.send(client.client, currentGroup.clients.length));
+            group.clients.forEach(client => this.send(client.client, group.clients.length));
           }
         })
     );
   }
 
   onLeave(client: Client, consented: boolean) {
-    /**
-     * TODO:
-     * - if player is inside a READY group without confirmation, move all clients on that group back to the queue
-     */
-
     const index = this.stats.findIndex(stat => stat.client === client);
     this.stats.splice(index, 1);
   }
