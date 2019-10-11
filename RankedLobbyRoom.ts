@@ -6,6 +6,7 @@ interface MatchmakingGroup {
   clients: ClientStat[],
   priority?: boolean;
 
+  ready?: boolean;
   confirmed?: number;
 }
 
@@ -45,7 +46,7 @@ export class RankedLobbyRoom extends Room {
       this.numClientsToMatch = options.numClientsToMatch;
     }
 
-    // this.setSimulationInterval(() => this.redistributeGroups(), 5000);
+    this.setSimulationInterval(() => this.redistributeGroups(), 2000);
   }
 
   onJoin(client: Client, options: any) {
@@ -56,6 +57,7 @@ export class RankedLobbyRoom extends Room {
       options
     });
 
+    this.send(client, 1);
   }
 
   onMessage(client: Client, message: any) {
@@ -103,6 +105,13 @@ export class RankedLobbyRoom extends Room {
       const stat = stats[i];
       stat.waitingTime++;
 
+      /**
+       * do not attempt to re-assign groups for clients inside "ready" groups
+       */
+      if (stat.group && stat.group.ready) {
+        continue;
+      }
+
       if (currentGroup.clients.length === this.numClientsToMatch) {
         currentGroup = this.createGroup();
         totalRank = 0;
@@ -140,6 +149,7 @@ export class RankedLobbyRoom extends Room {
       this.groups
         .map(async (group) => {
           if (group.clients.length === this.numClientsToMatch) {
+            group.ready = true;
             group.confirmed = 0;
 
             /**

@@ -4,7 +4,7 @@
   "description": "npm init template for bootstraping an empty Colyseus project",
   "main": "lib/index.js",
   "scripts": {
-    "start": "ts-node index.ts",
+    "start": "nodemon index.ts",
     "loadtest": "colyseus-loadtest loadtest/example.ts --room my_room --numClients 2",
     "test": "mocha --require ts-node/register test/**Test.ts --exit"
   },
@@ -20,6 +20,7 @@
     "@types/express": "^4.17.1",
     "@types/mocha": "^5.2.7",
     "mocha": "^6.2.1",
+    "nodemon": "^1.19.3",
     "ts-node": "^8.1.0",
     "typescript": "^3.7.0-beta"
   },

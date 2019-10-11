@@ -6,6 +6,7 @@ import { monitor } from "@colyseus/monitor";
 import socialRoutes from "@colyseus/social/express"
 
 import { RankedLobbyRoom } from "./RankedLobbyRoom";
+import { GameRoom } from "./GameRoom";
 
 const port = Number(process.env.PORT || 2567);
 const app = express()
@@ -21,7 +22,11 @@ const gameServer = new Server({
 export const matchMaker = gameServer.matchMaker;
 
 // register your room handlers
-gameServer.define('ranked', RankedLobbyRoom);
+gameServer
+  .define('ranked', RankedLobbyRoom)
+  .filterBy(['numClientsToMatch']);
+
+gameServer.define('game', GameRoom);
 
 app.use(express.static(__dirname));
 

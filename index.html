@@ -6,25 +6,51 @@
   <meta http-equiv="X-UA-Compatible" content="ie=edge">
   <title>Ranked Matchmaking</title>
 
-  <script src="https://raw.githack.com/colyseus/colyseus.js/master/dist/colyseus.js?123"></script>
+  <script src="https://raw.githack.com/colyseus/colyseus.js/bd152c2985d03484339066653aba950155e144e1/dist/colyseus.js"></script>
   <style>
     html, body {
       font-size: 22px;
+      margin: 0;
+      padding: 0;
     }
 
     input { font-size: inherit; }
 
     section {
+      display: flex;
+      flex-direction: row;
+      flex-wrap: wrap;
     }
 
-    section div.player {
-
+    section div, div.new-player {
+      display: inline-block;
+      width: 10em;
+      height: 4em;
+      border-radius: 8px;
+      padding: 0.5em;
+      margin: 0 0.5em 0.5em 0;
     }
+
+    section div span {
+      display: block;
+    }
+
+    div.new-player {
+    }
+
+    input {
+      display: block;
+      width: 100%;
+    }
+
   </style>
 </head>
 <body>
-  <section>
-  </section>
+  <script id="status-template" type="text/template">
+    <span>sessionId: {sessionId}</span>
+    <span>rank: {rank}</span>
+    <span>status: <label class="status"></label></span>
+  </script>
 
   <div class="new-player">
     <form onsubmit="createNewPlayer(); return false;">
@@ -34,17 +60,43 @@
     </form>
   </div>
 
+  <section>
+  </section>
+
   <script>
-    const connections = [];
+    const container = document.querySelector('section');
+    const numClientsToMatch = 2;
+
     const client = new Colyseus.Client();
 
     async function createNewPlayer() {
-      const connection = await client.joinOrCreate("ranked", {
-        rank: parseInt(document.querySelector("#rank").value)
-      });
-      connection.onMessage((message) => console.log(message));
+      const rank = parseInt(document.querySelector("#rank").value);
 
-      connections.push(connection);
+      const connection = await client.joinOrCreate("ranked", { rank, numClientsToMatch });
+
+      const status = document.createElement("div");
+      status.innerHTML = document.getElementById("status-template")
+        .innerHTML
+        .replace("{sessionId}", connection.sessionId)
+        .replace("{rank}", rank);
+
+      container.appendChild(status);
+
+      connection.onLeave(() => console.log("MATCHMAKE CONNECTION DROPPED."));
+      connection.onMessage((message) => {
+        if (typeof(message)==="number") {
+          status.querySelector('.status').innerHTML = message + "/" + numClientsToMatch;
+
+        } else {
+          client.consumeSeatReservation(message).then((room) => {
+            connection.send(1);
+
+            room.onMessage(color => status.style.backgroundColor = color);
+
+            status.querySelector('.status').innerHTML = "CONNECTED!";
+          });
+        }
+      });
 
       // re-set values for new connection
       populateRandomValues();
