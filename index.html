@@ -22,7 +22,7 @@
       flex-wrap: wrap;
     }
 
-    section div, div.new-player {
+    section div {
       display: inline-block;
       width: 11.5em;
       height: 4em;
@@ -36,12 +36,13 @@
     }
 
     div.new-player {
+      padding: 0.5em;
     }
 
     input {
-      display: block;
-      width: 100%;
+      margin-right: 0.5em;
     }
+
 
   </style>
 </head>
@@ -54,8 +55,8 @@
 
   <div class="new-player">
     <form onsubmit="createNewPlayer(); return false;">
-      Rank: <input type="number" id="rank" placeholder="rank" />
-      Match size: <input type="number" id="numClientsToMatch" placeholder="numClientsToMatch" value="4" />
+      <label for="rank">Rank:</label> <input type="number" id="rank" placeholder="rank" />
+      <label for="numClientsToMatch">Match size:</label> <input type="number" id="numClientsToMatch" placeholder="numClientsToMatch" value="4" />
       <input type="submit" value="create" />
     </form>
   </div>

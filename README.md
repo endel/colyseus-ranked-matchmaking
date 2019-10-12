@@ -6,6 +6,8 @@ This may be included as part of the core in the future. Feedback and more
 use-cases are welcome to ensure the most common ones are covered by this
 implementation.
 
+<img src="screenshot.png?raw=1" />
+
 ### Pending changes in Colyseus to facilitate ranked matchmaking:
 
 - The `matchMaker` needs to be called from the room instance. (expose `matchMaker`)
