@@ -21,7 +21,7 @@ implementation.
 - Once a compatible group is found, a room is created for them, with their seats reserved
 - The clients then connect to the actual room, and disconnect from the lobby.
 
-The `gameServer` must define the both the intermediary room and the actual game
+The `gameServer` must define both the intermediary room and the actual game
 room:
 
 ```typescript
