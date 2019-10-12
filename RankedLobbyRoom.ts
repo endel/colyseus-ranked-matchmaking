@@ -98,15 +98,6 @@ export class RankedLobbyRoom extends Room {
   }
 
   onMessage(client: Client, message: any) {
-    /**
-     * TODO:
-     *
-     * AFTER MATCHMAKING IS DONE:
-     * - create a private room, and send `roomId`/`sessionId` to matched clients
-     * - in the client-side, after `onJoin()` is done for every client, send a message here
-     * - go back to the queue if doesn't receive confirmation from all clients within a timeframe
-     */
-
     if (message === 1) {
       const stat = this.stats.find(stat => stat.client === client);
 
