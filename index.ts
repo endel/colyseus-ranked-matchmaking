@@ -3,7 +3,6 @@ import express from "express";
 import cors from "cors";
 import { Server } from "colyseus";
 import { monitor } from "@colyseus/monitor";
-import socialRoutes from "@colyseus/social/express"
 
 import { RankedLobbyRoom } from "./RankedLobbyRoom";
 import { GameRoom } from "./GameRoom";
@@ -29,9 +28,6 @@ gameServer
 gameServer.define('game', GameRoom);
 
 app.use(express.static(__dirname));
-
-// register @colyseus/social routes
-app.use("/", socialRoutes);
 
 // register colyseus monitor AFTER registering your room handlers
 app.use("/colyseus", monitor(gameServer));

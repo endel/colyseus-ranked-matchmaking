@@ -19,6 +19,15 @@ implementation.
 - Once a compatible group is found, a room is created for them, with their seats reserved
 - The clients then connect to the actual room, and disconnect from the lobby.
 
+The `gameServer` must define the both the intermediary room and the actual game
+room:
+
+```typescript
+// register your room handlers
+gameServer.define('ranked', RankedLobbyRoom);
+gameServer.define('game', GameRoom);
+```
+
 The `RankedLobbyRoom` has a few variables you can change to control how it works.
 
 ### `numClientsToMatch`: number
@@ -44,6 +53,15 @@ If `allowUnmatchedGroups` is true, players inside an unmatched group (that did n
 ### `evaluateGroupsInterval`: number
 
 Evaluate groups for each client at interval
+
+## Considerations / Pending stuff
+
+- There must be a way to prevent `"game"` rooms from being created directly,
+  without passing through the `"ranked"` process.
+- There is a low possibility that not all matched clients are going to connect
+  to the matched group due to their connectivity status, leaving some spots
+  empty - you can ensure bots will take their place after some time the `"game"`
+  room has been created.
 
 ## License
 
