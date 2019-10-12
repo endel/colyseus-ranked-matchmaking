@@ -31,6 +31,11 @@ export class RankedLobbyRoom extends Room {
   allowUnmatchedGroups: boolean = false
 
   /**
+   * Evaluate groups for each client at interval
+   */
+  evaluateGroupsInterval = 2000;
+
+  /**
    * Groups of players per iteration
    */
   groups: MatchmakingGroup[] = [];
@@ -76,9 +81,9 @@ export class RankedLobbyRoom extends Room {
     }
 
     /**
-     * Redistribute clients into groups at every 2000ms
+     * Redistribute clients into groups at every interval
      */
-    this.setSimulationInterval(() => this.redistributeGroups(), 2000);
+    this.setSimulationInterval(() => this.redistributeGroups(), this.evaluateGroupsInterval);
   }
 
   onJoin(client: Client, options: any) {
