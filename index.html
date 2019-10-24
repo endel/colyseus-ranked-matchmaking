@@ -22,13 +22,27 @@
       flex-wrap: wrap;
     }
 
+    /* client info */
     section div {
+      position: relative;
       display: inline-block;
       width: 11.5em;
       height: 4em;
       border-radius: 8px;
       padding: 0.5em;
       margin: 0 0.5em 0.5em 0;
+    }
+
+    /* cancel button */
+    section div a {
+      position: absolute;
+      right: 0;
+      bottom: 0;
+      color: red;
+    }
+    section div a.cancelled {
+      text-decoration: none;
+      pointer-events: none;
     }
 
     section div span {
@@ -48,6 +62,7 @@
 </head>
 <body>
   <script id="status-template" type="text/template">
+    <a href="#">Cancel (X)</a>
     <span>sessionId: {sessionId}</span>
     <span>rank: {rank}</span>
     <span>status: <label class="status"></label></span>
@@ -81,6 +96,20 @@
         .replace("{sessionId}", connection.sessionId)
         .replace("{rank}", rank);
 
+      const cancelButton = status.querySelector('a');
+      cancelButton.addEventListener("click", (e) => {
+        e.preventDefault();
+
+        if (cancelButton.classList.contains('cancelled')) {
+          return;
+        }
+
+        cancelButton.classList.add('cancelled')
+        cancelButton.innerText = 'CANCELLED';
+
+        connection.leave();
+      });
+
       container.appendChild(status);
 
       connection.onLeave(() => console.log("MATCHMAKE CONNECTION DROPPED."));
@@ -94,6 +123,7 @@
 
             room.onMessage(color => status.style.backgroundColor = color);
 
+            status.removeChild(cancelButton);
             status.querySelector('.status').innerHTML = "CONNECTED!";
           });
         }
