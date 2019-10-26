@@ -205,7 +205,7 @@ export class RankedLobbyRoom extends Room {
             const room = await matchMaker.createRoom(this.roomToCreate, {});
 
             await Promise.all(group.clients.map(async (client) => {
-              const matchData = await (matchMaker as any).reserveSeatFor(room, client.options);
+              const matchData = await matchMaker.reserveSeatFor(room, client.options);
 
               /**
                * Send room data for new WebSocket connection!
