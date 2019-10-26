@@ -1,5 +1,4 @@
-import { Room, Client, Delayed } from "colyseus";
-import { matchMaker } from ".";
+import { Room, Client, Delayed, matchMaker } from "colyseus";
 
 interface MatchmakingGroup {
   averageRank: number;

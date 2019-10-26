@@ -18,8 +18,6 @@ const gameServer = new Server({
   server,
 });
 
-export const matchMaker = gameServer.matchMaker;
-
 // register your room handlers
 gameServer
   .define('ranked', RankedLobbyRoom)
