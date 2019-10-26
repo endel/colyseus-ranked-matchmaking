@@ -8,12 +8,6 @@ implementation.
 
 <img src="screenshot.png?raw=1" />
 
-### Pending changes in Colyseus to facilitate ranked matchmaking:
-
-- The `matchMaker` needs to be called from the room instance. (expose `matchMaker`)
-- `matchMaker.reserveSeatFor()` needs to be a public method
-- The client needs to be able to consume the seat reservation, a new added must be added in the clients to allow this `consumeSeatReservation()` (already added to [colyseus.js](https://github.com/colyseus/colyseus.js/) and [colyseus-defold](https://github.com/colyseus/colyseus-defold/))
-
 ## How it works
 
 - User joins `RankedLobbyRoom` with his `rank` number (trophies, mmr, etc.)
