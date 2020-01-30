@@ -1,5 +1,7 @@
 # Colyseus: Ranked Matchmaking
 
+[![Build Status](https://travis-ci.org/endel/colyseus-ranked-matchmaking.svg?branch=master)](https://travis-ci.org/endel/colyseus-ranked-matchmaking)
+
 This is an example on how to achieve Ranked Matchmaking within Colyseus.
 
 This may be included as part of the core in the future. Feedback and more

@@ -103,14 +103,7 @@ export class RankedLobbyRoom extends Room {
       if (stat && stat.group && typeof(stat.group.confirmed) === "number") {
         stat.confirmed = true;
         stat.group.confirmed++;
-
-        /**
-         * All clients confirmed, let's disconnect them!
-         */
-        if (stat.group.confirmed === stat.group.clients.length) {
-          // stat.group.cancelConfirmationTimeout!.clear();
-          stat.group.clients.forEach(client => client.client.close());
-        }
+        stat.client.terminate();
       }
     }
   }
@@ -142,21 +135,16 @@ export class RankedLobbyRoom extends Room {
       }
 
       if (currentGroup.clients.length === this.numClientsToMatch) {
+        currentGroup.ready = true;
+
         currentGroup = this.createGroup();
         totalRank = 0;
       }
 
       /**
-       * Match long-waiting clients with bots
-       * FIXME: peers of this group may be entered short ago
-       */
-      if (stat.waitingTime >= this.maxWaitingTime && this.allowUnmatchedGroups) {
-        currentGroup.ready = true;
-
-      /**
        * Force this client to join a group, even if rank is incompatible
        */
-      } else if (
+      if (
         this.maxWaitingTimeForPriority !== undefined &&
         stat.waitingTime >= this.maxWaitingTimeForPriority
       ) {
@@ -186,6 +174,14 @@ export class RankedLobbyRoom extends Room {
       totalRank += stat.rank;
 
       currentGroup.averageRank = totalRank / currentGroup.clients.length;
+
+      /**
+       * Match long-waiting clients with bots
+       * FIXME: peers of this group may be entered short ago
+       */
+      if (stat.waitingTime >= this.maxWaitingTime && this.allowUnmatchedGroups) {
+        currentGroup.ready = true;
+      }
     }
 
     this.checkGroupsReady();
@@ -195,7 +191,7 @@ export class RankedLobbyRoom extends Room {
     await Promise.all(
       this.groups
         .map(async (group) => {
-          if (group.ready || group.clients.length === this.numClientsToMatch) {
+          if (group.ready) {
             group.ready = true;
             group.confirmed = 0;
 
