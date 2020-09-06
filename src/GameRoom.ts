@@ -15,10 +15,7 @@ export class GameRoom extends Room {
 
   onJoin(client: Client, options: any) {
     console.log("JOINED GAME ROOM:", client.sessionId, options)
-    this.send(client, this.color);
-  }
-
-  onMessage(client: Client, message: any) {
+    client.send("color", this.color);
   }
 
   onLeave(client: Client, consented: boolean) {

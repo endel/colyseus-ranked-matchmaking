@@ -6,7 +6,7 @@
   <meta http-equiv="X-UA-Compatible" content="ie=edge">
   <title>Ranked Matchmaking</title>
 
-  <script src="https://raw.githack.com/colyseus/colyseus.js/bd152c2985d03484339066653aba950155e144e1/dist/colyseus.js"></script>
+  <script src="https://raw.githack.com/colyseus/colyseus.js/8fb833b08f532973c20f10e163223ef159e2fd7b/dist/colyseus.dev.js"></script>
   <style>
     html, body {
       font-size: 22px;
@@ -70,14 +70,24 @@
 
   <div class="new-player">
     <form onsubmit="createNewPlayer(); return false;">
+      <ul>
+        <li>Each time you click "create", a new connection is established with <code>"ranked"</code> room.</li>
+        <li>The <code>"ranked"</code> room has an in-memory list of connected clients</li>
+        <li>Clients are re-distributed into different groups every 2 seconds (<code>evaluateGroupsInterval</code>)</li>
+        <li>Whenever a group is ready, the game room is created (<code>roomToCreate</code>) and the seat reservation is sent to each client as a message.</li>
+        <li>Clients call <code><a href="https://docs.colyseus.io/client/client/#consumeseatreservation-reservation">.consumeSeatReservation()</a></code> to establish connection with the final game room.</li>
+        <li>If <code>allowUnmatchedGroups</code> is set to <code>true</code>, groups are going to be flagged as "ready" automatically after <code>maxWaitingTime</code>.</li>
+        <li>(You may customize how the rank-based client distribution works, see the source-code of "RankedLobbyRoom.ts")</li>
+      </ul>
+
       <label for="rank">Rank:</label> <input type="number" id="rank" placeholder="rank" />
       <label for="numClientsToMatch">Match size:</label> <input type="number" id="numClientsToMatch" placeholder="numClientsToMatch" value="4" />
       <input type="submit" value="create" />
     </form>
   </div>
 
-  <section>
-  </section>
+    <section>
+    </section>
 
   <script>
     const container = document.querySelector('section');
@@ -113,20 +123,22 @@
       container.appendChild(status);
 
       connection.onLeave(() => console.log("MATCHMAKE CONNECTION DROPPED."));
-      connection.onMessage((message) => {
-        if (typeof(message)==="number") {
-          status.querySelector('.status').innerHTML = message + "/" + numClientsToMatch;
 
-        } else {
-          client.consumeSeatReservation(message).then((room) => {
-            connection.send(1);
+      connection.onMessage("seat", (message) => {
+        client.consumeSeatReservation(message).then((room) => {
+          connection.send("confirm");
 
-            room.onMessage(color => status.style.backgroundColor = color);
-
-            status.removeChild(cancelButton);
-            status.querySelector('.status').innerHTML = "CONNECTED!";
+          room.onMessage("color", (color) => {
+            status.style.backgroundColor = color;
           });
-        }
+
+          status.removeChild(cancelButton);
+          status.querySelector('.status').innerHTML = "CONNECTED!";
+        });
+      });
+
+      connection.onMessage("clients", (message) => {
+        status.querySelector('.status').innerHTML = message + "/" + numClientsToMatch;
       });
 
       // re-set values for new connection

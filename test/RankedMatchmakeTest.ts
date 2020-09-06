@@ -1,12 +1,20 @@
 import assert from "assert";
 
 import { Client, generateId } from "colyseus";
-import { RankedLobbyRoom } from "../RankedLobbyRoom";
+import { RankedLobbyRoom } from "../src/RankedLobbyRoom";
+
+const clientMessages: { [sessionId: string]: any[] } = {};
 
 function createClient() {
-  return { sessionId: generateId() } as Client;
+  const sessionId = generateId();
+  return {
+    sessionId,
+    send: function (type: string, message: any) {
+      if (!clientMessages[sessionId]) { clientMessages[sessionId] = []; }
+      clientMessages[sessionId].push({ type, message });
+    }
+  } as Client;
 }
-
 
 describe("Ranked matchmaker", () => {
   let room: RankedLobbyRoom;
@@ -97,7 +105,7 @@ describe("Ranked matchmaker", () => {
     assert.equal(66.25, room.groups[2].averageRank);
   });
 
-  it("should distribute better matchking ranks", () => {
+  it("should distribute better matching ranks", () => {
     room.numClientsToMatch = 4;
 
     room.onJoin(createClient(), { rank: 1 });

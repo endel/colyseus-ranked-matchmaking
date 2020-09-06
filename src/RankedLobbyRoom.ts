@@ -79,6 +79,16 @@ export class RankedLobbyRoom extends Room {
       this.numClientsToMatch = options.numClientsToMatch;
     }
 
+    this.onMessage("confirm", (client: Client, message: any) => {
+      const stat = this.stats.find(stat => stat.client === client);
+
+      if (stat && stat.group && typeof (stat.group.confirmed) === "number") {
+        stat.confirmed = true;
+        stat.group.confirmed++;
+        stat.client.leave();
+      }
+    })
+
     /**
      * Redistribute clients into groups at every interval
      */
@@ -93,19 +103,7 @@ export class RankedLobbyRoom extends Room {
       options
     });
 
-    this.send(client, 1);
-  }
-
-  onMessage(client: Client, message: any) {
-    if (message === 1) {
-      const stat = this.stats.find(stat => stat.client === client);
-
-      if (stat && stat.group && typeof(stat.group.confirmed) === "number") {
-        stat.confirmed = true;
-        stat.group.confirmed++;
-        stat.client.terminate();
-      }
-    }
+    client.send("clients", 1);
   }
 
   createGroup() {
@@ -132,13 +130,6 @@ export class RankedLobbyRoom extends Room {
        */
       if (stat.group && stat.group.ready) {
         continue;
-      }
-
-      if (currentGroup.clients.length === this.numClientsToMatch) {
-        currentGroup.ready = true;
-
-        currentGroup = this.createGroup();
-        totalRank = 0;
       }
 
       /**
@@ -172,15 +163,20 @@ export class RankedLobbyRoom extends Room {
       currentGroup.clients.push(stat);
 
       totalRank += stat.rank;
-
       currentGroup.averageRank = totalRank / currentGroup.clients.length;
 
-      /**
-       * Match long-waiting clients with bots
-       * FIXME: peers of this group may be entered short ago
-       */
-      if (stat.waitingTime >= this.maxWaitingTime && this.allowUnmatchedGroups) {
+      if (
+        (currentGroup.clients.length === this.numClientsToMatch) ||
+
+        /**
+         * Match long-waiting clients with bots
+         * FIXME: peers of this group may be entered short ago
+         */
+        (stat.waitingTime >= this.maxWaitingTime && this.allowUnmatchedGroups)
+      ) {
         currentGroup.ready = true;
+        currentGroup = this.createGroup();
+        totalRank = 0;
       }
     }
 
@@ -192,7 +188,6 @@ export class RankedLobbyRoom extends Room {
       this.groups
         .map(async (group) => {
           if (group.ready) {
-            group.ready = true;
             group.confirmed = 0;
 
             /**
@@ -206,7 +201,7 @@ export class RankedLobbyRoom extends Room {
               /**
                * Send room data for new WebSocket connection!
                */
-              this.send(client.client, matchData);
+              client.client.send("seat", matchData);
             }));
 
             // /**
@@ -224,7 +219,9 @@ export class RankedLobbyRoom extends Room {
             /**
              * Notify all clients within the group on how many players are in the queue
              */
-            group.clients.forEach(client => this.send(client.client, group.clients.length));
+            group.clients.forEach(client => {
+              client.client.send("clients", group.clients.length);
+            });
           }
         })
     );
