@@ -4,93 +4,61 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="X-UA-Compatible" content="ie=edge">
-  <title>Ranked Matchmaking</title>
+  <title>Colyseus - Ranked Matchmaking / Matchmaking Queue</title>
 
-  <script src="https://raw.githack.com/colyseus/colyseus.js/8fb833b08f532973c20f10e163223ef159e2fd7b/dist/colyseus.dev.js"></script>
-  <style>
-    html, body {
-      font-size: 22px;
-      margin: 0;
-      padding: 0;
-    }
+  <!-- Include Tailwind CSS via CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/colyseus.js@%5E0.16.0/dist/colyseus.js"></script>
 
-    input { font-size: inherit; }
-
-    section {
-      display: flex;
-      flex-direction: row;
-      flex-wrap: wrap;
-    }
-
-    /* client info */
-    section div {
-      position: relative;
-      display: inline-block;
-      width: 11.5em;
-      height: 4em;
-      border-radius: 8px;
-      padding: 0.5em;
-      margin: 0 0.5em 0.5em 0;
-    }
-
-    /* cancel button */
-    section div a {
-      position: absolute;
-      right: 0;
-      bottom: 0;
-      color: red;
-    }
-    section div a.cancelled {
-      text-decoration: none;
-      pointer-events: none;
-    }
-
-    section div span {
-      display: block;
-    }
-
-    div.new-player {
-      padding: 0.5em;
-    }
-
-    input {
-      margin-right: 0.5em;
-    }
-
-
-  </style>
 </head>
-<body>
-  <script id="status-template" type="text/template">
-    <a href="#">Cancel (X)</a>
-    <span>sessionId: {sessionId}</span>
-    <span>rank: {rank}</span>
-    <span>status: <label class="status"></label></span>
+<body class="p-4">
+  <script id="status-template" type="text/template" class="p-3 text-sm relative max-w-sm bg-gray-100 border-2 rounded">
+    <a class="absolute right-2 bottom-2 px-2 py-1 bg-red-600 text-white rounded" href="#">Leave queue</a>
+    <div>sessionId: {sessionId}</div>
+    <div>rank: {rank}</div>
+    <div>queue: <label class="status"></label></div>
+    <div>roomId: <label class="roomId">(...)</label></div>
   </script>
 
-  <div class="new-player">
-    <form onsubmit="createNewPlayer(); return false;">
-      <ul>
-        <li>Each time you click "create", a new connection is established with <code>"ranked"</code> room.</li>
-        <li>The <code>"ranked"</code> room has an in-memory list of connected clients</li>
+  <div class="flex flex-col lg:flex-row gap-4">
+    <div class="bg-gray-100 p-4 rounded text-gray-800 border-2 border-gray-100">
+      <h1 class="text-4xl text-black"><strong>Ranked Matchmaking Queue</strong> with Colyseus</h1>
+      <p>You may customize how the rank-based client distribution works, see the source-code of <code>"RankedQueueRoom.ts"</code></p>
+
+      <ul class="ml-8 list-disc mb-2 my-4 pr-8">
+        <li>Each time you click "create", a new connection is established with <code>"queue"</code> room.</li>
+        <li>The <code>"queue"</code> room has an in-memory list of connected clients</li>
         <li>Clients are re-distributed into different groups every 2 seconds (<code>evaluateGroupsInterval</code>)</li>
         <li>Whenever a group is ready, the game room is created (<code>roomToCreate</code>) and the seat reservation is sent to each client as a message.</li>
-        <li>Clients call <code><a href="https://docs.colyseus.io/client/client/#consumeseatreservation-reservation">.consumeSeatReservation()</a></code> to establish connection with the final game room.</li>
+        <li>Clients call <code><a href="https://docs.colyseus.io/client#consume-seat-reservation">.consumeSeatReservation()</a></code> to establish connection with the final game room.</li>
         <li>If <code>allowUnmatchedGroups</code> is set to <code>true</code>, groups are going to be flagged as "ready" automatically after <code>maxWaitingTime</code>.</li>
-        <li>(You may customize how the rank-based client distribution works, see the source-code of "RankedLobbyRoom.ts")</li>
       </ul>
+    </div>
 
-      <label for="rank">Rank:</label> <input type="number" id="rank" placeholder="rank" />
-      <label for="numClientsToMatch">Match size:</label> <input type="number" id="numClientsToMatch" placeholder="numClientsToMatch" value="4" />
-      <input type="submit" value="create" />
+    <form class="bg-gray-100 rounded p-4 flex flex-col grow border-2 border-gray-300" onsubmit="createNewPlayer(); return false;">
+      <h2 class="text-2xl mb-2 font-bold">New client</h2>
+      <div class="space-y-2 mb-3">
+        <div class="flex flex-col space-y-1">
+          <label class="text-sm" for="rank">Rank:</label>
+          <input class="p-2 rounded" type="number" id="rank" placeholder="rank" />
+        </div>
+        <div class="flex flex-col space-y-1">
+          <label class="text-sm" for="numClientsToMatch">Match size:</label>
+          <input class="p-2 rounded mb-2" type="number" id="numClientsToMatch" placeholder="numClientsToMatch" value="4" />
+        </div>
+      </div>
+
+      <input class="text-white p-2 bg-gray-900 rounded cursor-pointer hover:bg-gray-700 transition-all" type="submit" value="Join queue" />
     </form>
+
   </div>
 
-    <section>
-    </section>
+  <section class="flex flex-row flex-wrap gap-2 mt-4">
+  </section>
 
   <script>
     const container = document.querySelector('section');
+    const statusTemplate = document.getElementById("status-template");
 
     const client = new Colyseus.Client();
 
@@ -98,10 +66,14 @@
       const rank = parseInt(document.querySelector("#rank").value);
       const numClientsToMatch = parseInt(document.querySelector("#numClientsToMatch").value);
 
-      const connection = await client.joinOrCreate("ranked", { rank, numClientsToMatch });
+      const connection = await client.joinOrCreate("queue", {
+        rank,
+        numClientsToMatch,
+      });
 
       const status = document.createElement("div");
-      status.innerHTML = document.getElementById("status-template")
+      status.className = statusTemplate.className;
+      status.innerHTML = statusTemplate
         .innerHTML
         .replace("{sessionId}", connection.sessionId)
         .replace("{rank}", rank);
@@ -116,6 +88,7 @@
 
         cancelButton.classList.add('cancelled')
         cancelButton.innerText = 'CANCELLED';
+        status.classList.add('opacity-50');
 
         connection.leave();
       });
@@ -129,16 +102,19 @@
           connection.send("confirm");
 
           room.onMessage("color", (color) => {
-            status.style.backgroundColor = color;
+            status.classList.add(`bg-${color}`);
+            status.classList.add(`border-${color}`);
+            status.classList.add(`text-white`);
           });
 
           status.removeChild(cancelButton);
-          status.querySelector('.status').innerHTML = "CONNECTED!";
+          status.querySelector('.status').innerText = "FOUND";
+          status.querySelector('.roomId').innerText = room.roomId;
         });
       });
 
       connection.onMessage("clients", (message) => {
-        status.querySelector('.status').innerHTML = message + "/" + numClientsToMatch;
+        status.querySelector('.status').innerText = message + "/" + numClientsToMatch;
       });
 
       // re-set values for new connection

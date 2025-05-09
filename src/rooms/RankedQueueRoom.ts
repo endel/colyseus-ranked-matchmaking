@@ -20,7 +20,7 @@ interface ClientStat {
   confirmed?: boolean;
 }
 
-export class RankedLobbyRoom extends Room {
+export class RankedQueueRoom extends Room {
   /**
    * If `allowUnmatchedGroups` is true, players inside an unmatched group (that
    * did not reached `numClientsToMatch`, and `maxWaitingTime` has been
@@ -42,7 +42,7 @@ export class RankedLobbyRoom extends Room {
   /**
    * name of the room to create
    */
-  roomToCreate = "game";
+  roomToCreate = "my_room";
 
   /**
    * after this time, create a match with a bot
