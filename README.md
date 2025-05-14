@@ -1,8 +1,6 @@
-# Colyseus: Ranked Matchmaking
+# Ranked Queue with Colyseus
 
-[![Build Status](https://travis-ci.org/endel/colyseus-ranked-matchmaking.svg?branch=master)](https://travis-ci.org/endel/colyseus-ranked-matchmaking)
-
-This is an example on how to achieve Ranked Matchmaking within Colyseus.
+This is an example on how to achieve Ranked Matchmaking Queues in Colyseus.
 
 This may be included as part of the core in the future. Feedback and more
 use-cases are welcome to ensure the most common ones are covered by this
@@ -32,7 +30,7 @@ The `RankedLobbyRoom` has a few variables you can change to control how it works
 
 Target number of players on new game matches
 
-### `roomToCreate`: string
+### `roomNameToCreate`: string
 
 Name of the room to create
 
