@@ -1,8 +1,15 @@
-import { Room, Client, Delayed, matchMaker } from "colyseus";
+import { Room, Client, Delayed, matchMaker, spliceOne, ClientArray, ClientState } from "@colyseus/core";
 
-interface MatchmakingGroup {
+interface RankedQueueOptions {
+  maxWaitingTime?: number;
+  maxPlayers?: number;
+  roomNameToCreate?: string;
+  maxWaitingTimeForPriority?: number;
+}
+
+interface MatchGroup {
   averageRank: number;
-  clients: ClientStat[],
+  clients: Array<Client<ClientQueueData>>,
   priority?: boolean;
 
   ready?: boolean;
@@ -11,19 +18,42 @@ interface MatchmakingGroup {
   // cancelConfirmationTimeout?: Delayed;
 }
 
-interface ClientStat {
-  client: Client;
-  waitingTime: number;
-  options?: any;
-  group?: MatchmakingGroup;
+interface ClientQueueData {
+  /**
+   * Timestamp of when the client entered the queue
+   */
+  entryTime: number;
+
+  /**
+   * Rank of the client
+   */
   rank: number;
+
+  /**
+   * Additional options passed by the client when joining the room
+   */
+  options?: any;
+
+  /**
+   * Match group the client is currently in
+   */
+  group?: MatchGroup;
+
+  /**
+   * Whether the client has confirmed the connection to the room
+   */
   confirmed?: boolean;
+
+  /**
+   * The last number of clients in the queue sent to the client
+   */
+  lastQueueClientCount?: number;
 }
 
 export class RankedQueueRoom extends Room {
   /**
    * If `allowUnmatchedGroups` is true, players inside an unmatched group (that
-   * did not reached `numClientsToMatch`, and `maxWaitingTime` has been
+   * did not reached `maxPlayers`, and `maxWaitingTime` has been
    * reached) will be matched together. Your room should fill the remaining
    * spots with "bots" on this case.
    */
@@ -37,12 +67,12 @@ export class RankedQueueRoom extends Room {
   /**
    * Groups of players per iteration
    */
-  groups: MatchmakingGroup[] = [];
+  groups: MatchGroup[] = [];
 
   /**
    * name of the room to create
    */
-  roomToCreate = "my_room";
+  roomNameToCreate = "my_room";
 
   /**
    * after this time, create a match with a bot
@@ -57,7 +87,7 @@ export class RankedQueueRoom extends Room {
   /**
    * number of players on each match
    */
-  numClientsToMatch = 4;
+  maxPlayers = 4;
 
   // /**
   //  * after a group is ready, clients have this amount of milliseconds to confirm
@@ -65,27 +95,22 @@ export class RankedQueueRoom extends Room {
   //  */
   // cancelConfirmationAfter = 5000;
 
-  /**
-   * rank and group cache per-player
-   */
-  stats: ClientStat[] = [];
-
-  onCreate(options: any) {
+  onCreate(options: RankedQueueOptions) {
     if (options.maxWaitingTime) {
       this.maxWaitingTime = options.maxWaitingTime;
     }
 
-    if (options.numClientsToMatch) {
-      this.numClientsToMatch = options.numClientsToMatch;
+    if (options.maxPlayers) {
+      this.maxPlayers = options.maxPlayers;
     }
 
-    this.onMessage("confirm", (client: Client, message: any) => {
-      const stat = this.stats.find(stat => stat.client === client);
+    this.onMessage("confirm", (client: Client<ClientQueueData>, message: any) => {
+      const stat = client.userData;
 
       if (stat && stat.group && typeof (stat.group.confirmed) === "number") {
         stat.confirmed = true;
         stat.group.confirmed++;
-        stat.client.leave();
+        client.leave();
       }
     })
 
@@ -96,39 +121,53 @@ export class RankedQueueRoom extends Room {
   }
 
   onJoin(client: Client, options: any) {
-    this.stats.push({
-      client: client,
+    this.addToQueue(client, {
       rank: options.rank,
-      waitingTime: 0,
-      options
+      entryTime: Date.now(),
+      options,
     });
+  }
 
+  addToQueue(client: Client, queueData: ClientQueueData) {
+    client.userData = queueData;
     client.send("clients", 1);
   }
 
   createGroup() {
-    let group: MatchmakingGroup = { clients: [], averageRank: 0 };
+    const group: MatchGroup = { clients: [], averageRank: 0 };
     this.groups.push(group);
     return group;
   }
 
   redistributeGroups() {
     // re-set all groups
-    this.groups = [];
+    this.groups.length = 0;
 
-    const stats = this.stats.sort((a, b) => a.rank - b.rank);
+    const sortedClients = (this.clients as ClientArray<ClientQueueData>)
+      .filter((client) => {
+        // Filter out:
+        // - clients that are not in the queue
+        // - clients that are already in a "ready" group
+        return (
+          client.userData &&
+          client.userData.group?.ready !== true
+        );
+      })
+      .sort((a, b) => a.userData.rank - b.userData.rank); // sort by rank
 
-    let currentGroup: MatchmakingGroup = this.createGroup();
+    let currentGroup: MatchGroup = this.createGroup();
     let totalRank = 0;
 
-    for (let i = 0, l = stats.length; i < l; i++) {
-      const stat = stats[i];
-      stat.waitingTime += this.clock.deltaTime;
+    for (let i = 0, l = sortedClients.length; i < l; i++) {
+      const client = sortedClients[i];
+      const queueData = client.userData;
+
+      const waitingTime = Date.now() - client.userData.entryTime;
 
       /**
        * do not attempt to re-assign groups for clients inside "ready" groups
        */
-      if (stat.group && stat.group.ready) {
+      if (queueData.group && queueData.group.ready) {
         continue;
       }
 
@@ -137,7 +176,7 @@ export class RankedQueueRoom extends Room {
        */
       if (
         this.maxWaitingTimeForPriority !== undefined &&
-        stat.waitingTime >= this.maxWaitingTimeForPriority
+        waitingTime >= this.maxWaitingTimeForPriority
       ) {
         currentGroup.priority = true;
       }
@@ -146,7 +185,7 @@ export class RankedQueueRoom extends Room {
         currentGroup.averageRank > 0 &&
         !currentGroup.priority
       ) {
-        const diff = Math.abs(stat.rank - currentGroup.averageRank);
+        const diff = Math.abs(queueData.rank - currentGroup.averageRank);
         const diffRatio = (diff / currentGroup.averageRank);
 
         /**
@@ -159,20 +198,20 @@ export class RankedQueueRoom extends Room {
         }
       }
 
-      stat.group = currentGroup;
-      currentGroup.clients.push(stat);
+      queueData.group = currentGroup;
+      currentGroup.clients.push(client);
 
-      totalRank += stat.rank;
+      totalRank += queueData.rank;
       currentGroup.averageRank = totalRank / currentGroup.clients.length;
 
       if (
-        (currentGroup.clients.length === this.numClientsToMatch) ||
+        (currentGroup.clients.length === this.maxPlayers) ||
 
         /**
          * Match long-waiting clients with bots
          * FIXME: peers of this group may be entered short ago
          */
-        (stat.waitingTime >= this.maxWaitingTime && this.allowUnmatchedGroups)
+        (waitingTime >= this.maxWaitingTime && this.allowUnmatchedGroups)
       ) {
         currentGroup.ready = true;
         currentGroup = this.createGroup();
@@ -180,57 +219,60 @@ export class RankedQueueRoom extends Room {
       }
     }
 
-    this.checkGroupsReady();
+    this.processReadyGroups();
   }
 
-  async checkGroupsReady() {
-    await Promise.all(
-      this.groups
-        .map(async (group) => {
-          if (group.ready) {
-            group.confirmed = 0;
+  processReadyGroups() {
+    this.groups.forEach(async (group) => {
+      if (group.ready) {
+        group.confirmed = 0;
 
-            /**
-             * Create room instance in the server.
-             */
-            const room = await matchMaker.createRoom(this.roomToCreate, {});
+        /**
+         * Create room instance in the server.
+         */
+        // TODO: handle if an error occurs when creating the room
+        // TODO: handle if an error occurs when reserving a seat for the client
+        const room = await matchMaker.createRoom(this.roomNameToCreate, {});
 
-            await Promise.all(group.clients.map(async (client) => {
-              const matchData = await matchMaker.reserveSeatFor(room, client.options);
+        await Promise.all(group.clients.map(async (client) => {
+          const matchData = await matchMaker.reserveSeatFor(room, client.userData.options, client.auth);
 
-              /**
-               * Send room data for new WebSocket connection!
-               */
-              client.client.send("seat", matchData);
-            }));
+          /**
+           * Send room data for new WebSocket connection!
+           */
+          client.send("seat", matchData);
+        }));
 
-            // /**
-            //  * Cancel & re-enqueue clients if some of them couldn't confirm connection.
-            //  */
-            // group.cancelConfirmationTimeout = this.clock.setTimeout(() => {
-            //   group.clients.forEach(stat => {
-            //     this.send(stat.client, 0);
-            //     stat.group = undefined;
-            //     stat.waitingTime = 0;
-            //   });
-            // }, this.cancelConfirmationAfter);
+        // /**
+        //  * Cancel & re-enqueue clients if some of them couldn't confirm connection.
+        //  */
+        // group.cancelConfirmationTimeout = this.clock.setTimeout(() => {
+        //   group.clients.forEach(stat => {
+        //     this.send(stat.client, 0);
+        //     stat.group = undefined;
+        //     stat.waitingTime = 0;
+        //   });
+        // }, this.cancelConfirmationAfter);
 
-          } else {
-            /**
-             * Notify all clients within the group on how many players are in the queue
-             */
-            group.clients.forEach(client => {
-              client.client.send("clients", group.clients.length);
-            });
+      } else {
+        /**
+         * Notify clients within the group on how many players are in the queue
+         */
+        group.clients.forEach((client) => {
+          //
+          // avoid sending the same number of clients to the client if it hasn't changed
+          //
+          const queueClientCount = group.clients.length;
+          if (client.userData.lastQueueClientCount !== queueClientCount) {
+            client.userData.lastQueueClientCount = queueClientCount;
+            client.send("clients", queueClientCount);
           }
-        })
-    );
+        });
+      }
+    })
   }
 
-  onLeave(client: Client, consented: boolean) {
-    const index = this.stats.findIndex(stat => stat.client === client);
-    this.stats.splice(index, 1);
-  }
+  onLeave(client: Client, consented: boolean) { }
 
   onDispose() {
   }

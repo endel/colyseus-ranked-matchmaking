@@ -18,8 +18,10 @@ export default config({
      */
 
     gameServer
-      .define('queue', RankedQueueRoom)
-      .filterBy(['numClientsToMatch']);
+      .define('queue', RankedQueueRoom, {
+        roomNameToCreate: 'my_room',
+      })
+      .filterBy(['maxPlayers']);
 
     gameServer.define('my_room', MyRoom);
   },
