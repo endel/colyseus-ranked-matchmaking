@@ -134,7 +134,7 @@ export class RankedQueueRoom extends Room {
     client.send("clients", 1);
   }
 
-  createGroup() {
+  createMatchGroup() {
     const group: MatchGroup = { clients: [], averageRank: 0 };
     this.groups.push(group);
     return group;
@@ -156,7 +156,7 @@ export class RankedQueueRoom extends Room {
       })
       .sort((a, b) => a.userData.rank - b.userData.rank); // sort by rank
 
-    let currentGroup: MatchGroup = this.createGroup();
+    let currentGroup: MatchGroup = this.createMatchGroup();
     let totalRank = 0;
 
     for (let i = 0, l = sortedClients.length; i < l; i++) {
@@ -164,13 +164,6 @@ export class RankedQueueRoom extends Room {
       const queueData = client.userData;
 
       const waitingTime = Date.now() - client.userData.entryTime;
-
-      /**
-       * do not attempt to re-assign groups for clients inside "ready" groups
-       */
-      if (queueData.group && queueData.group.ready) {
-        continue;
-      }
 
       /**
        * Force this client to join a group, even if rank is incompatible
@@ -194,7 +187,7 @@ export class RankedQueueRoom extends Room {
          * figure out how to identify the diff ratio that makes sense
          */
         if (diffRatio > 2) {
-          currentGroup = this.createGroup();
+          currentGroup = this.createMatchGroup();
           totalRank = 0;
         }
       }
@@ -215,7 +208,7 @@ export class RankedQueueRoom extends Room {
         (waitingTime >= this.maxWaitingTime && this.allowUnmatchedGroups)
       ) {
         currentGroup.ready = true;
-        currentGroup = this.createGroup();
+        currentGroup = this.createMatchGroup();
         totalRank = 0;
       }
     }
@@ -233,6 +226,7 @@ export class RankedQueueRoom extends Room {
          */
         // TODO: handle if an error occurs when creating the room
         // TODO: handle if an error occurs when reserving a seat for the client
+        // TODO: handle if some client couldn't "confirm" connection
         const room = await matchMaker.createRoom(this.roomNameToCreate, {});
 
         await Promise.all(group.clients.map(async (client) => {
@@ -274,8 +268,6 @@ export class RankedQueueRoom extends Room {
   }
 
   onLeave(client: Client, consented: boolean) { }
-
-  onDispose() {
-  }
+  onDispose() {}
 
 }
