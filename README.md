@@ -28,9 +28,9 @@ gameServer.define('my_room', MyRoom);
 
 The `RankedLobbyRoom` has a few variables you can change to control how it works.
 
-### `numClientsToMatch`: number
+### `maxPlayers`: number
 
-number of players on each match
+Target number of players on new game matches
 
 ### `roomToCreate`: string
 
@@ -46,7 +46,7 @@ after this time, try to fit this client with a not-so-compatible group
 
 ### `allowUnmatchedGroups`: boolean
 
-If `allowUnmatchedGroups` is true, players inside an unmatched group (that did not reached `numClientsToMatch`, and `maxWaitingTime` has been reached) will be matched together. Your room should fill the remaining spots with "bots" on this case.
+If `allowUnmatchedGroups` is true, players inside an unmatched group (that did not reached `maxPlayers`, and `maxWaitingTime` has been reached) will be matched together. Your room should fill the remaining spots with "bots" on this case.
 
 ### `evaluateGroupsInterval`: number
 

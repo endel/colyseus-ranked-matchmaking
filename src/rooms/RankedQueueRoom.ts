@@ -121,6 +121,7 @@ export class RankedQueueRoom extends Room {
   }
 
   onJoin(client: Client, options: any) {
+    console.log("ON JOIN:", options);
     this.addToQueue(client, {
       rank: options.rank,
       entryTime: Date.now(),

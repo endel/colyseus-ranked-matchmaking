@@ -43,8 +43,8 @@
           <input class="p-2 rounded" type="number" id="rank" placeholder="rank" />
         </div>
         <div class="flex flex-col space-y-1">
-          <label class="text-sm" for="numClientsToMatch">Match size:</label>
-          <input class="p-2 rounded mb-2" type="number" id="numClientsToMatch" placeholder="numClientsToMatch" value="4" />
+          <label class="text-sm" for="maxPlayers">Match size:</label>
+          <input class="p-2 rounded mb-2" type="number" id="maxPlayers" placeholder="maxPlayers" value="4" />
         </div>
       </div>
 
@@ -64,18 +64,18 @@
 
     async function createNewPlayer() {
       const rank = parseInt(document.querySelector("#rank").value);
-      const numClientsToMatch = parseInt(document.querySelector("#numClientsToMatch").value);
+      const maxPlayers = parseInt(document.querySelector("#maxPlayers").value);
 
-      const connection = await client.joinOrCreate("queue", {
+      const queue = await client.joinOrCreate("queue", {
         rank,
-        numClientsToMatch,
+        maxPlayers,
       });
 
       const status = document.createElement("div");
       status.className = statusTemplate.className;
       status.innerHTML = statusTemplate
         .innerHTML
-        .replace("{sessionId}", connection.sessionId)
+        .replace("{sessionId}", queue.sessionId)
         .replace("{rank}", rank);
 
       const cancelButton = status.querySelector('a');
@@ -90,16 +90,16 @@
         cancelButton.innerText = 'CANCELLED';
         status.classList.add('opacity-50');
 
-        connection.leave();
+        queue.leave();
       });
 
       container.appendChild(status);
 
-      connection.onLeave(() => console.log("MATCHMAKE CONNECTION DROPPED."));
+      queue.onLeave(() => console.log("QUEUE CONNECTION DROPPED."));
 
-      connection.onMessage("seat", (message) => {
+      queue.onMessage("seat", (message) => {
         client.consumeSeatReservation(message).then((room) => {
-          connection.send("confirm");
+          queue.send("confirm");
 
           room.onMessage("color", (color) => {
             status.classList.add(`bg-${color}`);
@@ -113,8 +113,8 @@
         });
       });
 
-      connection.onMessage("clients", (message) => {
-        status.querySelector('.status').innerText = message + "/" + numClientsToMatch;
+      queue.onMessage("clients", (message) => {
+        status.querySelector('.status').innerText = message + "/" + maxPlayers;
       });
 
       // re-set values for new connection
