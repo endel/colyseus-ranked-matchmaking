@@ -22,8 +22,8 @@ room:
 
 ```typescript
 // register your room handlers
-gameServer.define('ranked', RankedLobbyRoom);
-gameServer.define('game', GameRoom);
+gameServer.define('queue', RankedQueueRoom);
+gameServer.define('my_room', MyRoom);
 ```
 
 The `RankedLobbyRoom` has a few variables you can change to control how it works.
