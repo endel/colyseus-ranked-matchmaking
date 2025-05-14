@@ -12,7 +12,7 @@ implementation.
 
 ## How it works
 
-- User joins `RankedLobbyRoom` with his `rank` number (trophies, mmr, etc.)
+- User joins `RankedQueueRoom` with his `rank` number (trophies, mmr, etc.)
 - A compatible group is evaluated for each client at every 2 seconds.
 - Once a compatible group is found, a room is created for them, with their seats reserved
 - The clients then connect to the actual room, and disconnect from the lobby.
