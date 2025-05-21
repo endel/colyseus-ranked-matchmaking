@@ -24,7 +24,7 @@ gameServer.define('queue', RankedQueueRoom);
 gameServer.define('my_room', MyRoom);
 ```
 
-The `RankedLobbyRoom` has a few variables you can change to control how it works.
+The `RankedQueueRoom` has a few variables you can change to control how it works.
 
 ### `maxPlayers`: number
 
@@ -34,30 +34,28 @@ Target number of players on new game matches
 
 Name of the room to create
 
-### `maxWaitingTime`: number
+### `maxWaitingCycles`: number
 
 After this time, create a match with a bot
 
-### `maxWaitingTimeForPriority`: number
+### `maxWaitingCyclesForPriority`: number
 
 after this time, try to fit this client with a not-so-compatible group
 
-### `allowUnmatchedGroups`: boolean
+### `allowIncompleteGroups`: boolean
 
-If `allowUnmatchedGroups` is true, players inside an unmatched group (that did not reached `maxPlayers`, and `maxWaitingTime` has been reached) will be matched together. Your room should fill the remaining spots with "bots" on this case.
+If `allowIncompleteGroups` is true, players inside an unmatched group (that did not reached `maxPlayers`, and `maxWaitingCycles` has been reached) will be matched together. Your room should fill the remaining spots with "bots" on this case.
 
-### `evaluateGroupsInterval`: number
+### `cycleTickInterval`: number
 
 Evaluate groups for each client at interval
 
-## Considerations / Pending stuff
+## Considerations
 
-- There must be a way to prevent `"game"` rooms from being created directly,
-  without passing through the `"ranked"` process.
-- There is a low possibility that not all matched clients are going to connect
-  to the matched group due to their connectivity status, leaving some spots
-  empty - you can ensure bots will take their place after some time the `"game"`
-  room has been created.
+There is a low possibility that not all matched clients are going to connect to
+the matched group due to their connectivity status, leaving some spots empty -
+you can ensure bots will take their place after some time the `roomNameToCreate`
+room has been created.
 
 ## License
 

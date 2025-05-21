@@ -20,6 +20,7 @@ export default config({
     gameServer
       .define('queue', RankedQueueRoom, {
         roomNameToCreate: 'my_room',
+        allowIncompleteGroups: true,
       })
       .filterBy(['maxPlayers']);
 

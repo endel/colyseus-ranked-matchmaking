@@ -13,12 +13,8 @@ interface RankedQueueOptions {
 interface MatchGroup {
   averageRank: number;
   clients: Array<Client<ClientQueueData>>,
-  priority?: boolean;
-
   ready?: boolean;
   confirmed?: number;
-
-  // cancelConfirmationTimeout?: Delayed;
 }
 
 interface ClientQueueData {
@@ -48,6 +44,12 @@ interface ClientQueueData {
   confirmed?: boolean;
 
   /**
+   * Whether the client should be prioritized in the queue
+   * (e.g. for players that are waiting for a long time)
+   */
+  highPriority?: boolean;
+
+  /**
    * The last number of clients in the queue sent to the client
    */
   lastQueueClientCount?: number;
@@ -57,7 +59,7 @@ export class RankedQueueRoom extends Room {
   /**
    * Evaluate groups for each client at interval
    */
-  cycleTickInterval = 2000;
+  cycleTickInterval = 1000;
 
   /**
    * after these cycles, create a match with a bot
@@ -67,7 +69,7 @@ export class RankedQueueRoom extends Room {
   /**
    * after this time, try to fit this client with a not-so-compatible group
    */
-  maxWaitingCyclesForPriority?: number = 10 * 1000;
+  maxWaitingCyclesForPriority?: number = 10;
 
   /**
    * number of players on each match
@@ -86,25 +88,24 @@ export class RankedQueueRoom extends Room {
    * Groups of players per iteration
    */
   groups: MatchGroup[] = [];
+  highPriorityGroups: MatchGroup[] = [];
 
   /**
    * name of the room to create
    */
   roomNameToCreate = "my_room";
 
-  // /**
-  //  * after a group is ready, clients have this amount of milliseconds to confirm
-  //  * connection to the created room
-  //  */
-  // cancelConfirmationAfter = 5000;
-
   onCreate(options: RankedQueueOptions) {
-    if (options.maxWaitingCycles) {
+    if (typeof(options.maxWaitingCycles) === "number") {
       this.maxWaitingCycles = options.maxWaitingCycles;
     }
 
-    if (options.maxPlayers) {
+    if (typeof(options.maxPlayers) === "number") {
       this.maxPlayers = options.maxPlayers;
+    }
+
+    if (typeof(options.allowIncompleteGroups) !== "undefined") {
+      this.allowIncompleteGroups = options.allowIncompleteGroups;
     }
 
     this.onMessage("confirm", (client: Client<ClientQueueData>, message: any) => {
@@ -113,8 +114,6 @@ export class RankedQueueRoom extends Room {
       if (queueData && queueData.group && typeof (queueData.group.confirmed) === "number") {
         queueData.confirmed = true;
         queueData.group.confirmed++;
-        // TODO:
-        // queueData.group.confirmed === clients.length
         client.leave();
       }
     });
@@ -122,7 +121,7 @@ export class RankedQueueRoom extends Room {
     /**
      * Redistribute clients into groups at every interval
      */
-    this.setSimulationInterval(() => this.redistributeGroups(), this.cycleTickInterval);
+    this.setSimulationInterval(() => this.reassignMatchGroups(), this.cycleTickInterval);
   }
 
   onJoin(client: Client, options: any) {
@@ -145,9 +144,10 @@ export class RankedQueueRoom extends Room {
     return group;
   }
 
-  redistributeGroups() {
+  reassignMatchGroups() {
     // re-set all groups
     this.groups.length = 0;
+    this.highPriorityGroups.length = 0;
 
     const sortedClients = (this.clients as ClientArray<ClientQueueData>)
       .filter((client) => {
@@ -159,41 +159,35 @@ export class RankedQueueRoom extends Room {
           client.userData.group?.ready !== true
         );
       })
-      .sort((a, b) => a.userData.rank - b.userData.rank); // sort by rank
+      .sort((a, b) => {
+        //
+        // Sort by rank ascending
+        //
+        return a.userData.rank - b.userData.rank;
+      });
 
     let currentGroup: MatchGroup = this.createMatchGroup();
     let totalRank = 0;
 
+    // console.log("\n\n============== REDISTRIBUTE CLIENTS =>", sortedClients.length);
+
     for (let i = 0, l = sortedClients.length; i < l; i++) {
       const client = sortedClients[i];
       const userData = client.userData;
-      const currentCycle = userData.currentCycle;
+      const currentCycle = userData.currentCycle++;
 
-      /**
-       * Force this client to join a group, even if rank is incompatible
-       */
-      if (
-        this.maxWaitingCyclesForPriority !== undefined &&
-        currentCycle >= this.maxWaitingCyclesForPriority
-      ) {
-        //
-        // TODO: put CLIENT on priority instead of forcing its group to be priority
-        //
-        currentGroup.priority = true;
-      }
+      // console.log({ rank: userData.rank, priority: userData.highPriority, avgRank: userData.group?.averageRank, cycle: currentCycle });
 
-      if (
-        currentGroup.averageRank > 0 &&
-        !currentGroup.priority
-      ) {
+      if (currentGroup.averageRank > 0) {
+        //
+        // TODO: allow end-user to customize this logic without the need to
+        // re-implement the whole RankedQueueRoom
+        //
         const diff = Math.abs(userData.rank - currentGroup.averageRank);
         const diffRatio = (diff / currentGroup.averageRank);
 
-        /**
-         * TODO: MAGIC NUMBERS ARE NOT WELCOME HERE!
-         * figure out how to identify the diff ratio that makes sense
-         */
-        if (diffRatio > 2) {
+        // If diff ratio is too high, create a new match group
+        if (diffRatio > 2 && !userData.highPriority) {
           currentGroup = this.createMatchGroup();
           totalRank = 0;
         }
@@ -205,25 +199,45 @@ export class RankedQueueRoom extends Room {
       totalRank += userData.rank;
       currentGroup.averageRank = totalRank / currentGroup.clients.length;
 
-      if (
-        (currentGroup.clients.length === this.maxPlayers) ||
-
-        /**
-         * Match long-waiting clients with bots
-         * FIXME: peers of this group may be entered short ago
-         */
-        (currentCycle >= this.maxWaitingCycles && this.allowIncompleteGroups)
-      ) {
+      // Group is ready!
+      if (currentGroup.clients.length === this.maxPlayers) {
         currentGroup.ready = true;
         currentGroup = this.createMatchGroup();
         totalRank = 0;
+        continue;
+      }
+
+      if (currentCycle >= this.maxWaitingCycles && this.allowIncompleteGroups) {
+        /**
+         * Match long-waiting clients with bots
+         */
+        if (this.highPriorityGroups.indexOf(currentGroup) === -1) {
+          this.highPriorityGroups.push(currentGroup);
+        }
+
+      } else if (
+        this.maxWaitingCyclesForPriority !== undefined &&
+        currentCycle >= this.maxWaitingCyclesForPriority
+      ) {
+        /**
+         * Force this client to join a group, even if rank is incompatible
+         */
+        userData.highPriority = true;
       }
     }
 
-    this.processReadyGroups();
+    /**
+     * Evaluate groups with high priority clients
+     */
+    this.highPriorityGroups.forEach((group) => {
+      group.ready = group.clients.every((c) =>
+        c.userData?.currentCycle >= this.maxWaitingCycles);
+    });
+
+    this.processGroupsReady();
   }
 
-  processReadyGroups() {
+  processGroupsReady() {
     this.groups.forEach(async (group) => {
       if (group.ready) {
         group.confirmed = 0;
@@ -272,7 +286,7 @@ export class RankedQueueRoom extends Room {
           }
         });
       }
-    })
+    });
   }
 
 }
