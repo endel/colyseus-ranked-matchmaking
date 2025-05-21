@@ -1,10 +1,13 @@
-import { Room, Client, Delayed, matchMaker, spliceOne, ClientArray, ClientState } from "@colyseus/core";
+import { Room, Client, matchMaker, ClientArray, } from "@colyseus/core";
 
 interface RankedQueueOptions {
-  maxWaitingTime?: number;
   maxPlayers?: number;
   roomNameToCreate?: string;
-  maxWaitingTimeForPriority?: number;
+
+  maxWaitingCycles?: number;
+  maxWaitingCyclesForPriority?: number;
+
+  allowIncompleteGroups?: boolean;
 }
 
 interface MatchGroup {
@@ -22,7 +25,7 @@ interface ClientQueueData {
   /**
    * Timestamp of when the client entered the queue
    */
-  entryTime: number;
+  currentCycle: number;
 
   /**
    * Rank of the client
@@ -52,17 +55,32 @@ interface ClientQueueData {
 
 export class RankedQueueRoom extends Room {
   /**
-   * If `allowUnmatchedGroups` is true, players inside an unmatched group (that
-   * did not reached `maxPlayers`, and `maxWaitingTime` has been
+   * Evaluate groups for each client at interval
+   */
+  cycleTickInterval = 2000;
+
+  /**
+   * after these cycles, create a match with a bot
+   */
+  maxWaitingCycles = 15;
+
+  /**
+   * after this time, try to fit this client with a not-so-compatible group
+   */
+  maxWaitingCyclesForPriority?: number = 10 * 1000;
+
+  /**
+   * number of players on each match
+   */
+  maxPlayers = 4;
+
+  /**
+   * If `allowIncompleteGroups` is true, players inside an unmatched group (that
+   * did not reached `maxPlayers`, and `maxWaitingCycles` has been
    * reached) will be matched together. Your room should fill the remaining
    * spots with "bots" on this case.
    */
-  allowUnmatchedGroups: boolean = false
-
-  /**
-   * Evaluate groups for each client at interval
-   */
-  evaluateGroupsInterval = 2000;
+  allowIncompleteGroups: boolean = false;
 
   /**
    * Groups of players per iteration
@@ -74,21 +92,6 @@ export class RankedQueueRoom extends Room {
    */
   roomNameToCreate = "my_room";
 
-  /**
-   * after this time, create a match with a bot
-   */
-  maxWaitingTime = 15 * 1000;
-
-  /**
-   * after this time, try to fit this client with a not-so-compatible group
-   */
-  maxWaitingTimeForPriority?: number = 10 * 1000;
-
-  /**
-   * number of players on each match
-   */
-  maxPlayers = 4;
-
   // /**
   //  * after a group is ready, clients have this amount of milliseconds to confirm
   //  * connection to the created room
@@ -96,8 +99,8 @@ export class RankedQueueRoom extends Room {
   // cancelConfirmationAfter = 5000;
 
   onCreate(options: RankedQueueOptions) {
-    if (options.maxWaitingTime) {
-      this.maxWaitingTime = options.maxWaitingTime;
+    if (options.maxWaitingCycles) {
+      this.maxWaitingCycles = options.maxWaitingCycles;
     }
 
     if (options.maxPlayers) {
@@ -105,26 +108,28 @@ export class RankedQueueRoom extends Room {
     }
 
     this.onMessage("confirm", (client: Client<ClientQueueData>, message: any) => {
-      const stat = client.userData;
+      const queueData = client.userData;
 
-      if (stat && stat.group && typeof (stat.group.confirmed) === "number") {
-        stat.confirmed = true;
-        stat.group.confirmed++;
+      if (queueData && queueData.group && typeof (queueData.group.confirmed) === "number") {
+        queueData.confirmed = true;
+        queueData.group.confirmed++;
+        // TODO:
+        // queueData.group.confirmed === clients.length
         client.leave();
       }
-    })
+    });
 
     /**
      * Redistribute clients into groups at every interval
      */
-    this.setSimulationInterval(() => this.redistributeGroups(), this.evaluateGroupsInterval);
+    this.setSimulationInterval(() => this.redistributeGroups(), this.cycleTickInterval);
   }
 
   onJoin(client: Client, options: any) {
     console.log("ON JOIN:", options);
     this.addToQueue(client, {
       rank: options.rank,
-      entryTime: Date.now(),
+      currentCycle: 0,
       options,
     });
   }
@@ -161,17 +166,19 @@ export class RankedQueueRoom extends Room {
 
     for (let i = 0, l = sortedClients.length; i < l; i++) {
       const client = sortedClients[i];
-      const queueData = client.userData;
-
-      const waitingTime = Date.now() - client.userData.entryTime;
+      const userData = client.userData;
+      const currentCycle = userData.currentCycle;
 
       /**
        * Force this client to join a group, even if rank is incompatible
        */
       if (
-        this.maxWaitingTimeForPriority !== undefined &&
-        waitingTime >= this.maxWaitingTimeForPriority
+        this.maxWaitingCyclesForPriority !== undefined &&
+        currentCycle >= this.maxWaitingCyclesForPriority
       ) {
+        //
+        // TODO: put CLIENT on priority instead of forcing its group to be priority
+        //
         currentGroup.priority = true;
       }
 
@@ -179,7 +186,7 @@ export class RankedQueueRoom extends Room {
         currentGroup.averageRank > 0 &&
         !currentGroup.priority
       ) {
-        const diff = Math.abs(queueData.rank - currentGroup.averageRank);
+        const diff = Math.abs(userData.rank - currentGroup.averageRank);
         const diffRatio = (diff / currentGroup.averageRank);
 
         /**
@@ -192,10 +199,10 @@ export class RankedQueueRoom extends Room {
         }
       }
 
-      queueData.group = currentGroup;
+      userData.group = currentGroup;
       currentGroup.clients.push(client);
 
-      totalRank += queueData.rank;
+      totalRank += userData.rank;
       currentGroup.averageRank = totalRank / currentGroup.clients.length;
 
       if (
@@ -205,7 +212,7 @@ export class RankedQueueRoom extends Room {
          * Match long-waiting clients with bots
          * FIXME: peers of this group may be entered short ago
          */
-        (waitingTime >= this.maxWaitingTime && this.allowUnmatchedGroups)
+        (currentCycle >= this.maxWaitingCycles && this.allowIncompleteGroups)
       ) {
         currentGroup.ready = true;
         currentGroup = this.createMatchGroup();
@@ -221,33 +228,34 @@ export class RankedQueueRoom extends Room {
       if (group.ready) {
         group.confirmed = 0;
 
-        /**
-         * Create room instance in the server.
-         */
-        // TODO: handle if an error occurs when creating the room
-        // TODO: handle if an error occurs when reserving a seat for the client
-        // TODO: handle if some client couldn't "confirm" connection
-        const room = await matchMaker.createRoom(this.roomNameToCreate, {});
+        try {
+          /**
+           * Create room instance in the server.
+           */
+          const room = await matchMaker.createRoom(this.roomNameToCreate, {});
 
-        await Promise.all(group.clients.map(async (client) => {
-          const matchData = await matchMaker.reserveSeatFor(room, client.userData.options, client.auth);
+          /**
+           * Reserve a seat for each client in the group.
+           * (If one fails, force all clients to leave, re-queueing is up to the client-side logic)
+           */
+          const seatReservations = await Promise.all(group.clients.map(async (client) => {
+            return await matchMaker.reserveSeatFor(room, client.userData.options, client.auth);
+          }));
 
           /**
            * Send room data for new WebSocket connection!
            */
-          client.send("seat", matchData);
-        }));
+          group.clients.forEach((client, i) => {
+            client.send("seat", seatReservations[i]);
+          });
 
-        // /**
-        //  * Cancel & re-enqueue clients if some of them couldn't confirm connection.
-        //  */
-        // group.cancelConfirmationTimeout = this.clock.setTimeout(() => {
-        //   group.clients.forEach(stat => {
-        //     this.send(stat.client, 0);
-        //     stat.group = undefined;
-        //     stat.waitingTime = 0;
-        //   });
-        // }, this.cancelConfirmationAfter);
+        } catch (e: any) {
+          //
+          // If creating a room, or reserving a seat failed - fail all clients
+          // Whether the clients retry or not is up to the client-side logic
+          //
+          group.clients.forEach(client => client.leave(1011, e.message));
+        }
 
       } else {
         /**
@@ -266,8 +274,5 @@ export class RankedQueueRoom extends Room {
       }
     })
   }
-
-  onLeave(client: Client, consented: boolean) { }
-  onDispose() {}
 
 }

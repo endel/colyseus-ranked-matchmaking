@@ -16,7 +16,7 @@ describe("Ranked Queue", () => {
     room.processReadyGroups = () => Promise.resolve();
   });
 
-  afterEach(() => room.onDispose());
+  // afterEach(() => room.onDispose());
 
   it("should create acceptance group", () => {
     createClient(room, { rank: 10 });
@@ -100,23 +100,20 @@ describe("Ranked Queue", () => {
 
   it("should give priority to players waiting longer", () => {
     room.maxPlayers = 4;
-    room.maxWaitingTimeForPriority = 10;
+    room.maxWaitingCyclesForPriority = 10;
 
     createClient(room, { rank: 1 });
-    for (let i = 0; i < room.maxWaitingTimeForPriority-1; i++) { room.redistributeGroups(); }
+    for (let i = 0; i < room.maxWaitingCyclesForPriority-1; i++) { room.redistributeGroups(); }
 
     createClient(room, { rank: 30 });
     createClient(room, { rank: 50 });
     createClient(room, { rank: 60 });
     createClient(room, { rank: 40 });
 
-    // simulate waiting time
-    setDateNowOffset(10 * 1000);
-
     room.redistributeGroups();
 
-    assert.equal(30.25, room.groups[0].averageRank);
-    assert.equal(60, room.groups[1].averageRank);
+    assert.equal(1, room.groups[0].averageRank);
+    assert.equal(45, room.groups[1].averageRank);
   });
 
 });

@@ -13,7 +13,7 @@
 </head>
 <body class="p-4">
   <script id="status-template" type="text/template" class="p-3 text-sm relative max-w-sm bg-gray-100 border-2 rounded">
-    <a class="absolute right-2 bottom-2 px-2 py-1 bg-red-600 text-white rounded" href="#">Leave queue</a>
+    <a class="absolute right-2 bottom-2 px-2 py-1 bg-red-600 text-xs text-white rounded" href="#">Leave queue</a>
     <div>sessionId: {sessionId}</div>
     <div>rank: {rank}</div>
     <div>queue: <label class="status"></label></div>
@@ -95,7 +95,24 @@
 
       container.appendChild(status);
 
-      queue.onLeave(() => console.log("QUEUE CONNECTION DROPPED."));
+      queue.onLeave((code, message) => {
+        console.log("LEFT QUEUE CONNECTION", {code});
+        status.removeChild(cancelButton);
+
+        if (code === 4000) {
+          // Cancelled!
+          status.querySelector('.status').innerHTML = `<span class="text-xs font-bold bg-gray-700 text-white rounded px-1 py-0.5 cursor-help">CANCELLED</span>`;
+
+        } else if (code > 1010) {
+          // Error!
+          status.querySelector('.status').innerHTML = `<span class="text-xs font-bold bg-red-700 text-white rounded px-1 py-0.5 cursor-help" title="${message}">ERROR</span>`;
+          status.classList.add(`bg-red-500`);
+          status.classList.add(`border-red-700`);
+          status.classList.add(`text-white`);
+          status.classList.add('opacity-80');
+          console.error("QUEUE ERROR", code, message);
+        }
+      });
 
       queue.onMessage("seat", (message) => {
         client.consumeSeatReservation(message).then((room) => {
@@ -107,8 +124,8 @@
             status.classList.add(`text-white`);
           });
 
-          status.removeChild(cancelButton);
-          status.querySelector('.status').innerText = "FOUND";
+          // status.removeChild(cancelButton);
+          status.querySelector('.status').innerHTML = '<span class="text-xs font-bold bg-green-600 text-white rounded px-1 py-0.5">FOUND</span>';
           status.querySelector('.roomId').innerText = room.roomId;
         });
       });
