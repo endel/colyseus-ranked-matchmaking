@@ -6,7 +6,7 @@ This may be included as part of the core in the future. Feedback and more
 use-cases are welcome to ensure the most common ones are covered by this
 implementation.
 
-<img src="screenshot.png?raw=1" />
+<img src="images/screenshot.png?raw=1" />
 
 ## How it works
 

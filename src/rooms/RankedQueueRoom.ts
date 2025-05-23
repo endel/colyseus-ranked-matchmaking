@@ -7,7 +7,14 @@ interface RankedQueueOptions {
   maxWaitingCycles?: number;
   maxWaitingCyclesForPriority?: number;
 
+  maxTeamSize?: number;
   allowIncompleteGroups?: boolean;
+
+  /**
+   * Comparison function for matching clients to groups
+   * Returns true if the client is compatible with the group
+   */
+  compare?: (client: ClientQueueData, matchGroup: MatchGroup) => boolean;
 }
 
 interface MatchGroup {
@@ -15,6 +22,12 @@ interface MatchGroup {
   clients: Array<Client<ClientQueueData>>,
   ready?: boolean;
   confirmed?: number;
+}
+
+interface MatchTeam {
+  averageRank: number;
+  clients: Array<Client<ClientQueueData>>,
+  teamId: string | symbol;
 }
 
 interface ClientQueueData {
@@ -27,6 +40,11 @@ interface ClientQueueData {
    * Rank of the client
    */
   rank: number;
+
+  /**
+   * Optional: if matching with a team, the team ID
+   */
+  teamId?: string;
 
   /**
    * Additional options passed by the client when joining the room
@@ -55,6 +73,15 @@ interface ClientQueueData {
   lastQueueClientCount?: number;
 }
 
+const DEFAULT_TEAM = Symbol("$default_team");
+const DEFAULT_COMPARE = (client: ClientQueueData, matchGroup: MatchGroup) => {
+  const diff = Math.abs(client.rank - matchGroup.averageRank);
+  const diffRatio = (diff / matchGroup.averageRank);
+
+  // If diff ratio is too high, create a new match group
+  return (diff < 10 || diffRatio <= 2);
+}
+
 export class RankedQueueRoom extends Room {
   /**
    * Evaluate groups for each client at interval
@@ -77,6 +104,11 @@ export class RankedQueueRoom extends Room {
   maxPlayers = 4;
 
   /**
+   * If set, teams must have the same size to be matched together
+   */
+  maxTeamSize: number;
+
+  /**
    * If `allowIncompleteGroups` is true, players inside an unmatched group (that
    * did not reached `maxPlayers`, and `maxWaitingCycles` has been
    * reached) will be matched together. Your room should fill the remaining
@@ -95,6 +127,8 @@ export class RankedQueueRoom extends Room {
    */
   roomNameToCreate = "my_room";
 
+  compare = DEFAULT_COMPARE;
+
   onCreate(options: RankedQueueOptions) {
     if (typeof(options.maxWaitingCycles) === "number") {
       this.maxWaitingCycles = options.maxWaitingCycles;
@@ -104,9 +138,25 @@ export class RankedQueueRoom extends Room {
       this.maxPlayers = options.maxPlayers;
     }
 
+    if (typeof(options.maxTeamSize) === "number") {
+      this.maxTeamSize = options.maxTeamSize;
+    }
+
     if (typeof(options.allowIncompleteGroups) !== "undefined") {
       this.allowIncompleteGroups = options.allowIncompleteGroups;
     }
+
+    if (typeof(options.compare) === "function") {
+      this.compare = options.compare;
+    }
+
+    console.log("RankedQueueRoom created!", {
+      maxPlayers: this.maxPlayers,
+      maxWaitingCycles: this.maxWaitingCycles,
+      maxTeamSize: this.maxTeamSize,
+      allowIncompleteGroups: this.allowIncompleteGroups,
+      roomNameToCreate: this.roomNameToCreate,
+    });
 
     this.onMessage("confirm", (client: Client<ClientQueueData>, message: any) => {
       const queueData = client.userData;
@@ -128,6 +178,7 @@ export class RankedQueueRoom extends Room {
     console.log("ON JOIN:", options);
     this.addToQueue(client, {
       rank: options.rank,
+      teamId: options.teamId,
       currentCycle: 0,
       options,
     });
@@ -135,6 +186,7 @@ export class RankedQueueRoom extends Room {
 
   addToQueue(client: Client, queueData: ClientQueueData) {
     client.userData = queueData;
+    // FIXME: reassign groups upon joining [?] (without incrementing cycle count)
     client.send("clients", 1);
   }
 
@@ -145,7 +197,7 @@ export class RankedQueueRoom extends Room {
   }
 
   reassignMatchGroups() {
-    // re-set all groups
+    // Re-set all groups
     this.groups.length = 0;
     this.highPriorityGroups.length = 0;
 
@@ -166,9 +218,74 @@ export class RankedQueueRoom extends Room {
         return a.userData.rank - b.userData.rank;
       });
 
-    let currentGroup: MatchGroup = this.createMatchGroup();
-    let totalRank = 0;
+    //
+    // The room either distribute by teams or by clients
+    //
+    if (typeof(this.maxTeamSize) === "number") {
+      this.redistributeTeams(sortedClients);
 
+    } else {
+      this.redistributeClients(sortedClients);
+    }
+
+    this.evaluateHighPriorityGroups();
+    this.processGroupsReady();
+  }
+
+  redistributeTeams(sortedClients: Client<ClientQueueData>[]) {
+    const teamsByID: { [teamId: string | symbol]: MatchTeam } = {};
+
+    sortedClients.forEach((client) => {
+      const teamId = client.userData.teamId || DEFAULT_TEAM;
+
+      // Create a new team if it doesn't exist
+      if (!teamsByID[teamId]) {
+        teamsByID[teamId] = { teamId: teamId, clients: [], averageRank: 0, };
+      }
+
+      teamsByID[teamId].averageRank += client.userData.rank;
+      teamsByID[teamId].clients.push(client);
+    });
+
+    // Calculate average rank for each team
+    let teams = Object.values(teamsByID).map((team) => {
+      team.averageRank /= team.clients.length;
+      return team;
+    }).sort((a, b) => {
+      // Sort by average rank ascending
+      return a.averageRank - b.averageRank;
+    });
+
+    // Iterate over teams multiple times until all clients are assigned to a group
+    do {
+      let currentGroup: MatchGroup = this.createMatchGroup();
+      teams = teams.filter((team) => {
+        // Remove clients from the team and add them to the current group
+        const totalRank = team.averageRank * team.clients.length;
+
+        // currentGroup.averageRank = (currentGroup.averageRank === undefined)
+        //   ? team.averageRank
+        //   : (currentGroup.averageRank + team.averageRank) / ;
+        currentGroup = this.redistributeClients(team.clients.splice(0, this.maxTeamSize), currentGroup, totalRank);
+
+        if (team.clients.length >= this.maxTeamSize) {
+          // team still has enough clients to form a group
+          return true;
+        }
+
+        // increment cycle count for all clients in the team
+        team.clients.forEach((client) => client.userData.currentCycle++);
+
+        return false;
+      });
+    } while (teams.length >= 2);
+  }
+
+  redistributeClients(
+    sortedClients: Client<ClientQueueData>[],
+    currentGroup: MatchGroup = this.createMatchGroup(),
+    totalRank: number = 0,
+  ) {
     // console.log("\n\n============== REDISTRIBUTE CLIENTS =>", sortedClients.length);
 
     for (let i = 0, l = sortedClients.length; i < l; i++) {
@@ -179,15 +296,10 @@ export class RankedQueueRoom extends Room {
       // console.log({ rank: userData.rank, priority: userData.highPriority, avgRank: userData.group?.averageRank, cycle: currentCycle });
 
       if (currentGroup.averageRank > 0) {
-        //
-        // TODO: allow end-user to customize this logic without the need to
-        // re-implement the whole RankedQueueRoom
-        //
-        const diff = Math.abs(userData.rank - currentGroup.averageRank);
-        const diffRatio = (diff / currentGroup.averageRank);
-
-        // If diff ratio is too high, create a new match group
-        if (diffRatio > 2 && !userData.highPriority) {
+        if (
+          !this.compare(userData, currentGroup) &&
+          !userData.highPriority
+        ) {
           currentGroup = this.createMatchGroup();
           totalRank = 0;
         }
@@ -199,7 +311,7 @@ export class RankedQueueRoom extends Room {
       totalRank += userData.rank;
       currentGroup.averageRank = totalRank / currentGroup.clients.length;
 
-      // Group is ready!
+      // Enough players in the group, mark it as ready!
       if (currentGroup.clients.length === this.maxPlayers) {
         currentGroup.ready = true;
         currentGroup = this.createMatchGroup();
@@ -226,15 +338,20 @@ export class RankedQueueRoom extends Room {
       }
     }
 
+    return currentGroup;
+  }
+
+  evaluateHighPriorityGroups() {
     /**
      * Evaluate groups with high priority clients
      */
     this.highPriorityGroups.forEach((group) => {
-      group.ready = group.clients.every((c) =>
-        c.userData?.currentCycle >= this.maxWaitingCycles);
+      group.ready = group.clients.every((c) => {
+        // Give new clients another chance to join a group that is not "high priority"
+        return c.userData?.currentCycle > 1;
+        // return c.userData?.currentCycle >= this.maxWaitingCycles;
+      });
     });
-
-    this.processGroupsReady();
   }
 
   processGroupsReady() {

@@ -21,7 +21,6 @@ const colorNames = [
   'slate',
   'gray',
   'zinc',
-  'neutral',
   'stone',
 ];
 const colorIntensities = [400, 500, 600, 700, 800, 900];

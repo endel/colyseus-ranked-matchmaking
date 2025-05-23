@@ -4,17 +4,20 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="X-UA-Compatible" content="ie=edge">
-  <title>Colyseus - Ranked Matchmaking Queue</title>
+  <title>Colyseus - Ranked Queue</title>
 
   <!-- Include Tailwind CSS via CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/colyseus.js@%5E0.16.0/dist/colyseus.js"></script>
+
+  <link rel="shortcut icon" href="images/logo.png" type="image/png">
 
 </head>
 <body class="p-4">
   <script id="status-template" type="text/template" class="p-3 text-sm relative max-w-sm bg-gray-100 border-2 rounded">
     <a class="absolute right-2 bottom-2 px-2 py-1 bg-red-600 text-xs text-white rounded" href="#">Leave queue</a>
     <div>sessionId: {sessionId}</div>
+    <div class="hidden">team: <span class="text-xs text-white rounded px-2 py-1 bg-gray-900">{teamId}</span></div>
     <div>rank: {rank}</div>
     <div>queue: <label class="status"></label></div>
     <div>roomId: <label class="roomId">(...)</label></div>
@@ -22,7 +25,7 @@
 
   <div class="flex flex-col lg:flex-row gap-4">
     <div class="bg-gray-100 p-4 rounded text-gray-800 border-2 border-gray-100">
-      <h1 class="text-4xl text-black mb-2"><strong>Ranked Queue</strong> with Colyseus</h1>
+      <h1 class="text-4xl text-black mb-2"><strong>Ranked Queue</strong> with <img src="images/logo.png" class="w-7 relative -top-1 left-1 inline-block" /> Colyseus</h1>
       <p>You may customize how the rank-based client distribution works, see the source-code of <code class="bg-gray-200 p-1 rounded text-black"><a href="https://github.com/endel/colyseus-ranked-matchmaking/blob/master/src/rooms/RankedQueueRoom.ts">RankedQueueRoom.ts</a></code></p>
 
       <ul class="ml-8 list-disc mb-2 my-4 pr-8">
@@ -35,7 +38,7 @@
       </ul>
     </div>
 
-    <form class="bg-gray-100 rounded p-4 flex flex-col grow border-2 border-gray-300" onsubmit="createNewPlayer(); return false;">
+    <form class="bg-gray-100 rounded p-4 flex flex-col grow border-2 border-gray-300" onsubmit="joinQueue(); return false;">
       <h2 class="text-2xl mb-2 font-bold">New client</h2>
       <div class="space-y-2 mb-3">
         <div class="flex flex-col space-y-1">
@@ -45,6 +48,17 @@
         <div class="flex flex-col space-y-1">
           <label class="text-sm" for="maxPlayers">Match size:</label>
           <input class="p-2 rounded mb-2" type="number" id="maxPlayers" placeholder="maxPlayers" value="4" />
+        </div>
+        <div class="flex flex-col space-y-1">
+          <label class="text-sm" for="team">
+            Join as a team:
+            <input type="checkbox" id="team" class="ml-1" onchange="toggleTeamInputs()" />
+            <strong class="px-2 py-1 bg-gray-200 cursor-help rounded-full" title="Team ID's are matched against each other">?</strong>
+          </label>
+          <div class="w-full flex flex-row space-x-2">
+            <input class="p-2 rounded mb-2 disabled:cursor-not-allowed disabled:bg-gray-200 grow" type="text" id="teamId" placeholder="Team ID" title="Team ID" value="" disabled="true"/>
+            <input class="p-2 rounded mb-2 disabled:cursor-not-allowed disabled:bg-gray-200" type="number" id="teamSize" value="2" disabled="true" placeholder="Team Size" title="Team Size" />
+          </div>
         </div>
       </div>
 
@@ -60,15 +74,28 @@
     const container = document.querySelector('section');
     const statusTemplate = document.getElementById("status-template");
 
+    const teamIdEl = document.querySelector("#teamId");
+    const teamSizeEl = document.querySelector("#teamSize");
+
     const client = new Colyseus.Client();
 
-    async function createNewPlayer() {
+    async function joinQueue() {
       const rank = parseInt(document.querySelector("#rank").value);
       const maxPlayers = parseInt(document.querySelector("#maxPlayers").value);
+
+      const teamSize = teamSizeEl.getAttribute('disabled') === "true"
+        ? undefined
+        : parseInt(teamSizeEl.value);
+
+      const teamId = teamSizeEl.getAttribute('disabled') === "true"
+        ? undefined
+        : teamIdEl.value;
 
       const queue = await client.joinOrCreate("queue", {
         rank,
         maxPlayers,
+        maxTeamSize: teamSize,
+        teamId,
       });
 
       const status = document.createElement("div");
@@ -77,6 +104,13 @@
         .innerHTML
         .replace("{sessionId}", queue.sessionId)
         .replace("{rank}", rank);
+
+      // display team ID
+      if (teamId) {
+        const teamNameEl = status.querySelector('.hidden');
+        teamNameEl.classList.remove('hidden');
+        teamNameEl.querySelector('span').innerText = teamId;
+      }
 
       const cancelButton = status.querySelector('a');
       cancelButton.addEventListener("click", (e) => {
@@ -140,6 +174,16 @@
 
     function populateRandomValues() {
       document.querySelector("#rank").value = Math.floor(Math.random() * 100);
+    }
+
+    function toggleTeamInputs() {
+      if (document.querySelector("#team").checked) {
+        teamIdEl.removeAttribute("disabled");
+        teamSizeEl.removeAttribute("disabled");
+      } else {
+        teamIdEl.setAttribute("disabled", "true");
+        teamSizeEl.setAttribute("disabled", "true");
+      }
     }
 
     populateRandomValues();
