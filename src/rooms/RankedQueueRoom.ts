@@ -1,6 +1,6 @@
 import { Room, Client, matchMaker, ClientArray, } from "@colyseus/core";
 
-interface RankedQueueOptions {
+export interface RankedQueueOptions {
   maxPlayers?: number;
   roomNameToCreate?: string;
 
@@ -17,29 +17,29 @@ interface RankedQueueOptions {
   compare?: (client: ClientQueueData, matchGroup: MatchGroup) => boolean;
 }
 
-interface MatchGroup {
+export interface MatchGroup {
   averageRank: number;
   clients: Array<Client<ClientQueueData>>,
   ready?: boolean;
   confirmed?: number;
 }
 
-interface MatchTeam {
+export interface MatchTeam {
   averageRank: number;
   clients: Array<Client<ClientQueueData>>,
   teamId: string | symbol;
 }
 
-interface ClientQueueData {
-  /**
-   * Timestamp of when the client entered the queue
-   */
-  currentCycle: number;
-
+export interface ClientQueueData {
   /**
    * Rank of the client
    */
   rank: number;
+
+  /**
+   * Timestamp of when the client entered the queue
+   */
+  currentCycle?: number;
 
   /**
    * Optional: if matching with a team, the team ID
@@ -129,7 +129,7 @@ export class RankedQueueRoom extends Room {
 
   compare = DEFAULT_COMPARE;
 
-  onCreate(options: RankedQueueOptions) {
+  onCreate(options: RankedQueueOptions = {}) {
     if (typeof(options.maxWaitingCycles) === "number") {
       this.maxWaitingCycles = options.maxWaitingCycles;
     }
@@ -179,13 +179,16 @@ export class RankedQueueRoom extends Room {
     this.addToQueue(client, {
       rank: options.rank,
       teamId: options.teamId,
-      currentCycle: 0,
       options,
     });
   }
 
   addToQueue(client: Client, queueData: ClientQueueData) {
+    if (queueData.currentCycle === undefined) {
+      queueData.currentCycle = 0;
+    }
     client.userData = queueData;
+
     // FIXME: reassign groups upon joining [?] (without incrementing cycle count)
     client.send("clients", 1);
   }

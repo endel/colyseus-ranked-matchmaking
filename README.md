@@ -74,6 +74,31 @@ The default implementation is:
 }
 ```
 
+## Extending the `RankedQueueRoom`
+
+You can extend the `RankedQueueRoom` class to add your own authentication logic and rank fetching and/or comparison.
+
+```typescript
+import { Room } from 'colyseus';
+import { auth, JWT } from "@colyseus/auth";
+import { RankedQueueRoom, RankedQueueOptions } from './RankedQueueRoom';
+
+export class MyRankedRoom extends RankedQueueRoom {
+	static onAuth(token: string) {
+		const tokenData = await JWT.verify(token);
+		const rank = await fetchRankFromDatabase(tokenData.userId);
+		return { rank };
+	}
+
+	onJoin(client: Client, options: any, auth: any) {
+		this.addToQueue(client, {
+			rank: auth.rank,
+		});
+	}
+}
+```
+
+
 ## Considerations
 
 There is a low possibility that not all matched clients are going to connect to
