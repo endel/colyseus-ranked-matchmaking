@@ -21,9 +21,11 @@ The `gameServer` must define both the intermediary room and the actual game room
 
 ```typescript
 // register your room handlers
-gameServer.define('queue', RankedQueueRoom);
+gameServer.define('queue', RankedQueueRoom, { /* configuration options */ });
 gameServer.define('my_room', MyRoom);
 ```
+
+### Available configuration options
 
 The `RankedQueueRoom` has a few variables you can change to control how it works.
 
