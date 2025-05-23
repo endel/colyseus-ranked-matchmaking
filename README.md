@@ -29,37 +29,37 @@ gameServer.define('my_room', MyRoom);
 
 The `RankedQueueRoom` has a few variables you can change to control how it works.
 
-### `maxPlayers`
+#### `maxPlayers`
 Type: `number`
 
 Target number of players on new game matches
 
-### `roomNameToCreate`
+#### `roomNameToCreate`
 Type: `string`
 
 Name of the room to create
 
-### `maxWaitingCycles`
+#### `maxWaitingCycles`
 Type: `number`
 
 After this time, create a match with a bot
 
-### `maxWaitingCyclesForPriority`
+#### `maxWaitingCyclesForPriority`
 Type: `number`
 
 after this time, try to fit this client with a not-so-compatible group
 
-### `allowIncompleteGroups`
+#### `allowIncompleteGroups`
 Type: `boolean`
 
 If `allowIncompleteGroups` is true, players inside an unmatched group (that did not reached `maxPlayers`, and `maxWaitingCycles` has been reached) will be matched together. Your room should fill the remaining spots with "bots" on this case.
 
-### `cycleTickInterval`
+#### `cycleTickInterval`
 Type: `number`
 
 Evaluate groups for each client at interval
 
-### `compare`
+#### `compare`
 Type: `(client: ClientQueueData, matchGroup: MatchGroup) => boolean`
 
 A function that is used to compare the rank of the client against the average rank of the group. The function should return true if the client is compatible with the group, and false otherwise.
