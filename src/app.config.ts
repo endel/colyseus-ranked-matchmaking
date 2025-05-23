@@ -21,9 +21,6 @@ export default config({
       .define('queue', RankedQueueRoom, {
         roomNameToCreate: 'my_room',
         allowIncompleteGroups: true,
-        // compare: (user, averageGroupRank) => {
-        //   return a.rank - b.rank;
-        // }
       })
       .filterBy(['maxPlayers', 'maxTeamSize']);
 
