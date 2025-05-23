@@ -29,6 +29,8 @@ gameServer.define('my_room', MyRoom);
 
 The `RankedQueueRoom` has a few variables you can change to control how it works.
 
+<div style="padding-left: 1em;">
+
 #### `maxPlayers`
 Type: `number`
 
@@ -75,6 +77,7 @@ The default implementation is:
   return (diff < 10 || diffRatio <= 2);
 }
 ```
+</div>
 
 ## Extending the `RankedQueueRoom`
 
