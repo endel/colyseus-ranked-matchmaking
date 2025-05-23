@@ -1,4 +1,4 @@
-import { Room, Client, matchMaker, ClientArray, } from "@colyseus/core";
+import { Room, Client, matchMaker, ClientArray, IRoomCache, } from "@colyseus/core";
 
 export interface RankedQueueOptions {
   maxPlayers?: number;
@@ -15,6 +15,12 @@ export interface RankedQueueOptions {
    * Returns true if the client is compatible with the group
    */
   compare?: (client: ClientQueueData, matchGroup: MatchGroup) => boolean;
+
+  /**
+   *
+   * When onGroupReady is set, the "roomNameToCreate" option is ignored.
+   */
+  onGroupReady?: (this: RankedQueueRoom, group: MatchGroup) => Promise<IRoomCache>;
 }
 
 export interface MatchGroup {
@@ -77,7 +83,6 @@ const DEFAULT_TEAM = Symbol("$default_team");
 const DEFAULT_COMPARE = (client: ClientQueueData, matchGroup: MatchGroup) => {
   const diff = Math.abs(client.rank - matchGroup.averageRank);
   const diffRatio = (diff / matchGroup.averageRank);
-
   // If diff ratio is too high, create a new match group
   return (diff < 10 || diffRatio <= 2);
 }
@@ -127,7 +132,8 @@ export class RankedQueueRoom extends Room {
    */
   roomNameToCreate = "my_room";
 
-  compare = DEFAULT_COMPARE;
+  protected compare = DEFAULT_COMPARE;
+  protected onGroupReady = (group: MatchGroup) => matchMaker.createRoom(this.roomNameToCreate, {});
 
   onCreate(options: RankedQueueOptions = {}) {
     if (typeof(options.maxWaitingCycles) === "number") {
@@ -148,6 +154,10 @@ export class RankedQueueRoom extends Room {
 
     if (typeof(options.compare) === "function") {
       this.compare = options.compare;
+    }
+
+    if (typeof(options.onGroupReady) === "function") {
+      this.onGroupReady = options.onGroupReady;
     }
 
     console.log("RankedQueueRoom created!", {
@@ -366,7 +376,7 @@ export class RankedQueueRoom extends Room {
           /**
            * Create room instance in the server.
            */
-          const room = await matchMaker.createRoom(this.roomNameToCreate, {});
+          const room = await this.onGroupReady.call(this, group);
 
           /**
            * Reserve a seat for each client in the group.

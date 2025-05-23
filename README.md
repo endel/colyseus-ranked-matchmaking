@@ -76,6 +76,25 @@ A function that is used to compare the rank of the client against the average ra
 }
 ```
 
+#### `onGroupReady`
+Type: `(group: MatchGroup) => Promise<IRoomCache>`
+
+Optional. This function is called when a match group is ready to be created. You can use it to customize the room creation process, like adding custom data to the room or modifying the room options.
+
+```typescript
+import { matchMaker } from "colyseus";
+// ...
+gameServer.define('queue', RankedQueueRoom, {
+	onGroupReady: async function (group: MatchGroup) {
+		// custom options
+		const roomOptions = {
+			numBots: this.maxPlayers - group.clients.length,
+		};
+		return matchMaker.createRoom('my_room', roomOptions);
+	},
+});
+```
+
 ## Extending the `RankedQueueRoom`
 
 You can extend the `RankedQueueRoom` class to add your own authentication logic and rank fetching and/or comparison.
