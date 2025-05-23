@@ -100,6 +100,57 @@ export class MyRankedRoom extends RankedQueueRoom {
 }
 ```
 
+If you extend the `onCreate()` method, make sure to call `super.onCreate()` to ensure the
+`RankedQueueRoom` is properly initialized.
+
+
+## Client SDK Implementation
+
+```typescript
+import { Client } from 'colyseus.js';
+
+// Create client SDK instance
+const client = new Client("ws://localhost:2567");
+
+// Join the queue
+const queue = await client.joinOrCreate("queue", {
+	rank,
+	maxPlayers,
+	maxTeamSize: teamSize,
+	teamId,
+});
+
+// Listen to queue status update
+queue.onMessage("clients", (numClients) => {
+	console.log("Number of clients in MatchGroup changed to:", numClients);
+});
+
+// Listen to match found event
+queue.onMessage("seat", (message) => {
+	client.consumeSeatReservation(message).then((room) => {
+		// Successfully connected to the game room,
+		// Send "confirm" message to notify the queue
+		queue.send("confirm");
+
+		// Now you can use the room instance to send messages to the game room
+		// ...
+	});
+});
+
+queue.onLeave((code, message) => {
+	console.log("LEFT QUEUE", { code });
+	if (code === 4000) {
+		// Cancelled!
+
+	} else if (code > 1010) {
+		// Error!
+		console.error("QUEUE ERROR", code, message);
+	}
+});
+
+// ... to manually leave the queue
+queue.leave();
+```
 
 ## Considerations
 
