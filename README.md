@@ -39,6 +39,11 @@ Type: `string`
 
 Name of the room to create
 
+#### `maxTeamSize`
+Type: `number`
+
+The maximum number of players in a team. This is used to determine how many players can be matched together in the same team by their `teamId`. If users provide a `teamId`, the `RankedQueueRoom` must also set a `maxTeamSize` to match them together.
+
 #### `maxWaitingCycles`
 Type: `number`
 
