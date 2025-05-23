@@ -174,7 +174,7 @@ export class RankedQueueRoom extends Room {
     this.setSimulationInterval(() => this.reassignMatchGroups(), this.cycleTickInterval);
   }
 
-  onJoin(client: Client, options: any) {
+  onJoin(client: Client, options: any, auth?: unknown) {
     console.log("ON JOIN:", options);
     this.addToQueue(client, {
       rank: options.rank,
