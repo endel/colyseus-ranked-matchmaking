@@ -29,8 +29,6 @@ gameServer.define('my_room', MyRoom);
 
 The `RankedQueueRoom` has a few variables you can change to control how it works.
 
-<div style="padding-left: 1em;">
-
 #### `maxPlayers`
 Type: `number`
 
@@ -66,7 +64,7 @@ Type: `(client: ClientQueueData, matchGroup: MatchGroup) => boolean`
 
 A function that is used to compare the rank of the client against the average rank of the group. The function should return true if the client is compatible with the group, and false otherwise.
 
-The default implementation is:
+**Default `compare` implementation:**
 
 ```typescript
 (client: ClientQueueData, matchGroup: MatchGroup) => {
@@ -77,7 +75,6 @@ The default implementation is:
   return (diff < 10 || diffRatio <= 2);
 }
 ```
-</div>
 
 ## Extending the `RankedQueueRoom`
 
